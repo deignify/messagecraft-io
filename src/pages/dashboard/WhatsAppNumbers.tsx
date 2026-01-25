@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -14,7 +13,6 @@ import {
 import {
   Phone,
   Plus,
-  Trash2,
   RefreshCw,
   ExternalLink,
   CheckCircle2,
@@ -23,11 +21,35 @@ import {
   Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export default function WhatsAppNumbers() {
   const { numbers, selectedNumber, selectNumber, refreshNumbers, loading } = useWhatsApp();
+  const { session } = useAuth();
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
 
+  // Handle OAuth callback results
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const error = urlParams.get('error');
+    const numbersCount = urlParams.get('numbers');
+
+    if (success === 'true') {
+      toast.success(`Successfully connected ${numbersCount || '0'} WhatsApp number(s)!`);
+      refreshNumbers();
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (error) {
+      const errorMessages: Record<string, string> = {
+        'token_exchange_failed': 'Failed to connect with Meta. Please try again.',
+        'waba_fetch_failed': 'Failed to fetch WhatsApp accounts. Please try again.',
+        'not_authenticated': 'Please log in before connecting WhatsApp.',
+      };
+      toast.error(errorMessages[error] || 'Connection failed. Please try again.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [refreshNumbers]);
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active':
@@ -57,10 +79,19 @@ export default function WhatsAppNumbers() {
     }
   };
 
-  const handleConnect = () => {
-    // Redirect to Meta OAuth flow
+  const handleConnect = async () => {
+    if (!session?.access_token) {
+      toast.error('Please log in to connect WhatsApp');
+      return;
+    }
+
+    // Build OAuth URL with return path
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
-    const oauthUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth?action=initiate`;
+    const returnUrl = encodeURIComponent('/dashboard/whatsapp-numbers');
+    const oauthUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth?action=initiate&return_url=${returnUrl}`;
+    
+    // We need to pass the auth token via a form or cookie since we're redirecting
+    // For now, redirect directly - the edge function will handle re-auth on callback
     window.location.href = oauthUrl;
   };
 

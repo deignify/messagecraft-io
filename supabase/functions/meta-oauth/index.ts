@@ -43,7 +43,173 @@ Deno.serve(async (req) => {
       throw new Error('Meta app credentials not configured')
     }
 
-    // Generate OAuth URL for initiating the flow
+    // Direct redirect to Meta OAuth - simple browser-based flow
+    if (action === 'initiate') {
+      const authHeader = req.headers.get('Authorization')
+      let userId: string | null = null
+
+      // Try to get user from auth header if present
+      if (authHeader?.startsWith('Bearer ')) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        const token = authHeader.replace('Bearer ', '')
+        const { data: claimsData } = await supabase.auth.getUser(token)
+        userId = claimsData?.user?.id || null
+      }
+
+      // For browser redirect, we use this function's URL as callback
+      const callbackUri = `${url.origin}${url.pathname}`
+      
+      // State contains user ID (if available) and timestamp
+      const state = btoa(JSON.stringify({ 
+        user_id: userId,
+        timestamp: Date.now(),
+        return_url: url.searchParams.get('return_url') || '/'
+      }))
+
+      // Meta OAuth URL with WhatsApp Business Management scope
+      const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
+      authUrl.searchParams.set('client_id', META_APP_ID)
+      authUrl.searchParams.set('redirect_uri', callbackUri)
+      authUrl.searchParams.set('state', state)
+      authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
+      authUrl.searchParams.set('response_type', 'code')
+
+      // Redirect to Meta
+      return new Response(null, {
+        status: 302,
+        headers: { 
+          ...corsHeaders, 
+          'Location': authUrl.toString() 
+        },
+      })
+    }
+
+    // Handle OAuth callback from Meta redirect
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+    
+    if (code && state) {
+      // Verify state
+      let stateData: { user_id: string | null; timestamp: number; return_url: string }
+      try {
+        stateData = JSON.parse(atob(state))
+      } catch {
+        throw new Error('Invalid state parameter')
+      }
+
+      // Check state is not too old (10 minutes)
+      if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
+        throw new Error('State expired')
+      }
+
+      const callbackUri = `${url.origin}${url.pathname}`
+
+      // Exchange code for access token
+      const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      tokenUrl.searchParams.set('client_id', META_APP_ID)
+      tokenUrl.searchParams.set('client_secret', META_APP_SECRET)
+      tokenUrl.searchParams.set('redirect_uri', callbackUri)
+      tokenUrl.searchParams.set('code', code)
+
+      const tokenResponse = await fetch(tokenUrl.toString())
+      const tokenData: MetaTokenResponse = await tokenResponse.json()
+
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        console.error('Token exchange failed:', tokenData)
+        const returnUrl = new URL(stateData.return_url, url.origin)
+        returnUrl.searchParams.set('error', 'token_exchange_failed')
+        return new Response(null, {
+          status: 302,
+          headers: { ...corsHeaders, 'Location': returnUrl.toString() }
+        })
+      }
+
+      // Get long-lived token
+      const longLivedUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      longLivedUrl.searchParams.set('grant_type', 'fb_exchange_token')
+      longLivedUrl.searchParams.set('client_id', META_APP_ID)
+      longLivedUrl.searchParams.set('client_secret', META_APP_SECRET)
+      longLivedUrl.searchParams.set('fb_exchange_token', tokenData.access_token)
+
+      const longLivedResponse = await fetch(longLivedUrl.toString())
+      const longLivedData: MetaTokenResponse = await longLivedResponse.json()
+
+      const accessToken = longLivedData.access_token || tokenData.access_token
+      const expiresIn = longLivedData.expires_in || tokenData.expires_in
+
+      // Get WhatsApp Business Accounts
+      const wabaResponse = await fetch(
+        `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      const wabaData = await wabaResponse.json()
+
+      if (!wabaResponse.ok) {
+        console.error('Failed to fetch WABA:', wabaData)
+        const returnUrl = new URL(stateData.return_url, url.origin)
+        returnUrl.searchParams.set('error', 'waba_fetch_failed')
+        return new Response(null, {
+          status: 302,
+          headers: { ...corsHeaders, 'Location': returnUrl.toString() }
+        })
+      }
+
+      // If we don't have a user_id from state, we can't store - redirect with error
+      if (!stateData.user_id) {
+        const returnUrl = new URL(stateData.return_url, url.origin)
+        returnUrl.searchParams.set('error', 'not_authenticated')
+        return new Response(null, {
+          status: 302,
+          headers: { ...corsHeaders, 'Location': returnUrl.toString() }
+        })
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      let numbersStored = 0
+
+      // Extract phone numbers from all WABAs
+      for (const business of wabaData.data || []) {
+        for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+          for (const phone of waba.phone_numbers?.data || []) {
+            // Store each phone number in the database
+            const { error } = await supabase.from('whatsapp_numbers').upsert({
+              user_id: stateData.user_id,
+              phone_number: phone.display_phone_number,
+              display_name: phone.verified_name,
+              waba_id: waba.id,
+              phone_number_id: phone.id,
+              access_token: accessToken,
+              token_expires_at: expiresIn 
+                ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+                : null,
+              status: 'active',
+              business_name: business.name,
+              quality_rating: phone.quality_rating,
+            }, { 
+              onConflict: 'phone_number_id',
+              ignoreDuplicates: false 
+            })
+
+            if (error) {
+              console.error('Failed to store phone number:', error)
+            } else {
+              numbersStored++
+            }
+          }
+        }
+      }
+
+      // Redirect back to app with success
+      const returnUrl = new URL(stateData.return_url, url.origin)
+      returnUrl.searchParams.set('success', 'true')
+      returnUrl.searchParams.set('numbers', String(numbersStored))
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, 'Location': returnUrl.toString() }
+      })
+    }
+
+    // Generate OAuth URL for initiating the flow (API call version)
     if (action === 'get-auth-url') {
       const authHeader = req.headers.get('Authorization')
       if (!authHeader?.startsWith('Bearer ')) {
@@ -72,7 +238,7 @@ Deno.serve(async (req) => {
       }
 
       // State contains user ID for verification after callback
-      const state = btoa(JSON.stringify({ 
+      const stateValue = btoa(JSON.stringify({ 
         user_id: claimsData.user.id,
         timestamp: Date.now() 
       }))
@@ -81,7 +247,7 @@ Deno.serve(async (req) => {
       const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
       authUrl.searchParams.set('client_id', META_APP_ID)
       authUrl.searchParams.set('redirect_uri', redirectUri)
-      authUrl.searchParams.set('state', state)
+      authUrl.searchParams.set('state', stateValue)
       authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
       authUrl.searchParams.set('response_type', 'code')
 

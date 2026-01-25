@@ -60,7 +60,7 @@ export default function WhatsAppNumbers() {
   const handleConnect = () => {
     // Redirect to Meta OAuth flow
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
-    const oauthUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+    const oauthUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth?action=initiate`;
     window.location.href = oauthUrl;
   };
 

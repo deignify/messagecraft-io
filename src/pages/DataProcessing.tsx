@@ -13,7 +13,7 @@ export default function DataProcessing() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
             <p className="text-muted-foreground leading-relaxed">
-              This Data Processing Agreement ("DPA") forms part of the Terms of Service between ChatFlow ("Processor") and you ("Controller") and governs the processing of personal data in connection with our services.
+              This Data Processing Agreement ("DPA") forms part of the Terms of Service between Chat Setu ("Processor") and you ("Controller") and governs the processing of personal data in connection with our services.
             </p>
           </section>
 
@@ -71,7 +71,7 @@ export default function DataProcessing() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">5. Processor Obligations</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              As the Processor, ChatFlow will:
+              As the Processor, Chat Setu will:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
               <li>Process personal data only on your documented instructions</li>
@@ -154,8 +154,8 @@ export default function DataProcessing() {
             <h2 className="text-2xl font-semibold mb-4">13. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               For questions about this Data Processing Agreement:<br />
-              Data Protection Officer: dpo@chatflow.com<br />
-              Privacy Team: privacy@chatflow.com
+              Data Protection Officer: dpo@chatsetu.com<br />
+              Privacy Team: privacy@chatsetu.com
             </p>
           </section>
         </div>

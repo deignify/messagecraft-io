@@ -22,7 +22,7 @@ export function Header() {
               <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-display font-bold text-foreground">
-              ChatFlow
+              Chat Setu
             </span>
           </Link>
 

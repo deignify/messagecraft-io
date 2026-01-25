@@ -49,7 +49,7 @@ export function SignupForm() {
       });
     } else {
       toast({
-        title: "Welcome to ChatFlow!",
+        title: "Welcome to Chat Setu!",
         description: "Your account has been created successfully.",
       });
       navigate('/dashboard');
@@ -68,7 +68,7 @@ export function SignupForm() {
               <MessageSquare className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="text-2xl font-display font-bold text-foreground">
-              ChatFlow
+              Chat Setu
             </span>
           </Link>
         </div>

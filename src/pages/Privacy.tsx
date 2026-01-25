@@ -13,7 +13,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Introduction</h2>
             <p className="text-muted-foreground leading-relaxed">
-              ChatFlow ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our WhatsApp Cloud API platform and related services.
+              Chat Setu ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our WhatsApp Cloud API platform and related services.
             </p>
           </section>
 
@@ -125,7 +125,7 @@ export default function Privacy() {
             <h2 className="text-2xl font-semibold mb-4">11. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have questions about this Privacy Policy, please contact us at:<br />
-              Email: privacy@chatflow.com<br />
+              Email: privacy@chatsetu.com<br />
               Address: [Your Business Address]
             </p>
           </section>

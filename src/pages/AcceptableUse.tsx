@@ -13,7 +13,7 @@ export default function AcceptableUse() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Purpose</h2>
             <p className="text-muted-foreground leading-relaxed">
-              This Acceptable Use Policy ("AUP") governs your use of ChatFlow's services and is designed to protect our users, partners, and the integrity of our platform. By using our services, you agree to comply with this policy.
+              This Acceptable Use Policy ("AUP") governs your use of Chat Setu's services and is designed to protect our users, partners, and the integrity of our platform. By using our services, you agree to comply with this policy.
             </p>
           </section>
 
@@ -39,7 +39,7 @@ export default function AcceptableUse() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">3. Prohibited Activities</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              You may NOT use ChatFlow services to:
+              You may NOT use Chat Setu services to:
             </p>
             
             <h3 className="text-xl font-medium mb-3">3.1 Spam and Unsolicited Messaging</h3>
@@ -95,7 +95,7 @@ export default function AcceptableUse() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">5. WhatsApp Business Policy Compliance</h2>
             <p className="text-muted-foreground leading-relaxed">
-              You must comply with all WhatsApp Business policies, including the WhatsApp Business Policy, Commerce Policy, and Business Messaging Policy. Violations of WhatsApp policies may result in account suspension by both WhatsApp and ChatFlow.
+              You must comply with all WhatsApp Business policies, including the WhatsApp Business Policy, Commerce Policy, and Business Messaging Policy. Violations of WhatsApp policies may result in account suspension by both WhatsApp and Chat Setu.
             </p>
           </section>
 
@@ -116,7 +116,7 @@ export default function AcceptableUse() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">7. Reporting Violations</h2>
             <p className="text-muted-foreground leading-relaxed">
-              If you become aware of any violations of this policy, please report them to abuse@chatflow.com. We investigate all reports and take appropriate action.
+              If you become aware of any violations of this policy, please report them to abuse@chatsetu.com. We investigate all reports and take appropriate action.
             </p>
           </section>
 
@@ -131,8 +131,8 @@ export default function AcceptableUse() {
             <h2 className="text-2xl font-semibold mb-4">9. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               For questions about this Acceptable Use Policy:<br />
-              Email: compliance@chatflow.com<br />
-              Abuse Reports: abuse@chatflow.com
+              Email: compliance@chatsetu.com<br />
+              Abuse Reports: abuse@chatsetu.com
             </p>
           </section>
         </div>

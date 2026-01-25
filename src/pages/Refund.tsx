@@ -13,7 +13,7 @@ export default function Refund() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Overview</h2>
             <p className="text-muted-foreground leading-relaxed">
-              At ChatFlow, we want you to be satisfied with our services. This Refund Policy outlines the circumstances under which refunds may be granted and the process for requesting them.
+              At Chat Setu, we want you to be satisfied with our services. This Refund Policy outlines the circumstances under which refunds may be granted and the process for requesting them.
             </p>
           </section>
 
@@ -63,7 +63,7 @@ export default function Refund() {
               To request a refund:
             </p>
             <ol className="list-decimal pl-6 space-y-2 text-muted-foreground">
-              <li>Contact our support team at billing@chatflow.com</li>
+              <li>Contact our support team at billing@chatsetu.com</li>
               <li>Include your account email and the reason for your request</li>
               <li>Provide any relevant documentation or evidence</li>
               <li>Allow up to 5 business days for review</li>
@@ -102,8 +102,8 @@ export default function Refund() {
             <h2 className="text-2xl font-semibold mb-4">10. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have questions about our refund policy, please contact us at:<br />
-              Email: billing@chatflow.com<br />
-              Support: support@chatflow.com
+              Email: billing@chatsetu.com<br />
+              Support: support@chatsetu.com
             </p>
           </section>
         </div>

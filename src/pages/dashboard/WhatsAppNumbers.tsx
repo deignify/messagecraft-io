@@ -11,6 +11,16 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Phone,
   Plus,
   RefreshCw,
@@ -19,14 +29,20 @@ import {
   AlertCircle,
   Clock,
   Loader2,
+  Unlink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import type { WhatsAppNumber } from '@/lib/supabase-types';
 
 export default function WhatsAppNumbers() {
   const { numbers, selectedNumber, selectNumber, refreshNumbers, loading } = useWhatsApp();
   const { session } = useAuth();
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
+  const [numberToUnlink, setNumberToUnlink] = useState<WhatsAppNumber | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -112,6 +128,84 @@ export default function WhatsAppNumbers() {
     } catch (err) {
       console.error('Failed to start Meta OAuth:', err);
       toast.error('Failed to start Meta OAuth. Please try again.');
+    }
+  };
+
+  const handleUnlinkClick = (e: React.MouseEvent, number: WhatsAppNumber) => {
+    e.stopPropagation();
+    setNumberToUnlink(number);
+    setUnlinkDialogOpen(true);
+  };
+
+  const handleUnlinkConfirm = async () => {
+    if (!numberToUnlink) return;
+    
+    setUnlinking(true);
+    try {
+      // First get automation IDs for this WhatsApp number
+      const { data: automations } = await supabase
+        .from('automations')
+        .select('id')
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      const automationIds = automations?.map(a => a.id) || [];
+
+      // Delete automation-related data if there are any automations
+      if (automationIds.length > 0) {
+        await supabase
+          .from('automation_sessions')
+          .delete()
+          .in('automation_id', automationIds);
+
+        await supabase
+          .from('automation_steps')
+          .delete()
+          .in('automation_id', automationIds);
+
+        await supabase
+          .from('automations')
+          .delete()
+          .eq('whatsapp_number_id', numberToUnlink.id);
+      }
+
+      // Delete messages, conversations, contacts, templates
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      await supabase
+        .from('conversations')
+        .delete()
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      await supabase
+        .from('contacts')
+        .delete()
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      await supabase
+        .from('templates')
+        .delete()
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      // Finally delete the WhatsApp number itself
+      const { error } = await supabase
+        .from('whatsapp_numbers')
+        .delete()
+        .eq('id', numberToUnlink.id);
+
+      if (error) throw error;
+
+      toast.success(`Successfully unlinked ${numberToUnlink.display_name || numberToUnlink.phone_number}`);
+      await refreshNumbers();
+    } catch (err) {
+      console.error('Failed to unlink WhatsApp number:', err);
+      toast.error('Failed to unlink WhatsApp number. Please try again.');
+    } finally {
+      setUnlinking(false);
+      setUnlinkDialogOpen(false);
+      setNumberToUnlink(null);
     }
   };
 
@@ -257,12 +351,68 @@ export default function WhatsAppNumbers() {
                       </p>
                     )}
                   </div>
+                  
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={(e) => handleUnlinkClick(e, number)}
+                  >
+                    <Unlink className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Unlink Confirmation Dialog */}
+      <AlertDialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlink WhatsApp Number?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Are you sure you want to unlink{' '}
+                <span className="font-semibold">
+                  {numberToUnlink?.display_name || numberToUnlink?.phone_number}
+                </span>
+                ?
+              </p>
+              <p className="text-destructive">
+                This will permanently delete all associated data including:
+              </p>
+              <ul className="list-disc list-inside text-sm text-muted-foreground">
+                <li>All conversations and messages</li>
+                <li>All contacts linked to this number</li>
+                <li>All message templates</li>
+                <li>All automations and their sessions</li>
+              </ul>
+              <p className="text-sm font-medium mt-2">
+                This action cannot be undone.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unlinking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnlinkConfirm}
+              disabled={unlinking}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {unlinking ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Unlinking...
+                </>
+              ) : (
+                'Unlink Account'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

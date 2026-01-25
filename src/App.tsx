@@ -22,6 +22,16 @@ import HotelAutomation from "./pages/dashboard/HotelAutomation";
 import SettingsPage from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
 
+// Legal & Info Pages
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
+import Refund from "./pages/Refund";
+import AcceptableUse from "./pages/AcceptableUse";
+import DataProcessing from "./pages/DataProcessing";
+import DataDeletion from "./pages/DataDeletion";
+import Contact from "./pages/Contact";
+import About from "./pages/About";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -37,6 +47,16 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              
+              {/* Legal & Info Pages */}
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/refund" element={<Refund />} />
+              <Route path="/acceptable-use" element={<AcceptableUse />} />
+              <Route path="/data-processing" element={<DataProcessing />} />
+              <Route path="/data-deletion" element={<DataDeletion />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/about" element={<About />} />
               
               {/* Protected dashboard routes */}
               <Route path="/dashboard" element={

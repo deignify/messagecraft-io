@@ -116,7 +116,7 @@ export default function AcceptableUse() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">7. Reporting Violations</h2>
             <p className="text-muted-foreground leading-relaxed">
-              If you become aware of any violations of this policy, please report them to abuse@chatsetu.com. We investigate all reports and take appropriate action.
+              If you become aware of any violations of this policy, please report them to <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a>. We investigate all reports and take appropriate action.
             </p>
           </section>
 
@@ -131,8 +131,8 @@ export default function AcceptableUse() {
             <h2 className="text-2xl font-semibold mb-4">9. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               For questions about this Acceptable Use Policy:<br />
-              Email: compliance@chatsetu.com<br />
-              Abuse Reports: abuse@chatsetu.com
+              Email: <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a><br />
+              Phone: <a href="tel:+919227154271" className="text-primary hover:underline">+91 92271 54271</a>
             </p>
           </section>
         </div>

@@ -8,7 +8,7 @@ const footerLinks = {
     { label: 'Integrations', href: '#' },
   ],
   company: [
-    { label: 'About', href: '#' },
+    { label: 'About', href: '/about' },
     { label: 'Contact', href: '/contact' },
     { label: 'Blog', href: '#' },
   ],
@@ -18,6 +18,7 @@ const footerLinks = {
     { label: 'Refund Policy', href: '/refund' },
     { label: 'Acceptable Use', href: '/acceptable-use' },
     { label: 'Data Processing', href: '/data-processing' },
+    { label: 'Data Deletion', href: '/data-deletion' },
   ],
 };
 

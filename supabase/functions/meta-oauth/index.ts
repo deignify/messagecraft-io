@@ -57,7 +57,8 @@ Deno.serve(async (req) => {
       }
 
       // For browser redirect, we use this function's URL as callback
-      const callbackUri = `${url.origin}${url.pathname}`
+      // Must use https and include /functions/v1/ path for Supabase edge functions
+      const callbackUri = `https://${url.hostname}/functions/v1/meta-oauth`
       
       // State contains user ID (if available) and timestamp
       const state = btoa(JSON.stringify({ 
@@ -102,7 +103,7 @@ Deno.serve(async (req) => {
         throw new Error('State expired')
       }
 
-      const callbackUri = `${url.origin}${url.pathname}`
+      const callbackUri = `https://${url.hostname}/functions/v1/meta-oauth`
 
       // Exchange code for access token
       const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')

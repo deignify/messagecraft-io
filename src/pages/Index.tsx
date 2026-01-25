@@ -1,6 +1,12 @@
 import { Header } from '@/components/landing/Header';
 import { HeroSection } from '@/components/landing/HeroSection';
+import { StatsSection } from '@/components/landing/StatsSection';
 import { FeaturesSection } from '@/components/landing/FeaturesSection';
+import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
+import { TestimonialsSection } from '@/components/landing/TestimonialsSection';
+import { PricingSection } from '@/components/landing/PricingSection';
+import { FAQSection } from '@/components/landing/FAQSection';
+import { CTASection } from '@/components/landing/CTASection';
 import { Footer } from '@/components/landing/Footer';
 
 const Index = () => {
@@ -9,7 +15,13 @@ const Index = () => {
       <Header />
       <main className="flex-1 pt-16">
         <HeroSection />
+        <StatsSection />
         <FeaturesSection />
+        <HowItWorksSection />
+        <TestimonialsSection />
+        <PricingSection />
+        <FAQSection />
+        <CTASection />
       </main>
       <Footer />
     </div>

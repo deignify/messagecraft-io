@@ -3,14 +3,13 @@ import { MessageSquare } from 'lucide-react';
 
 const footerLinks = {
   product: [
-    { label: 'Features', href: '#features' },
-    { label: 'Pricing', href: '/pricing' },
-    { label: 'Integrations', href: '#' },
+    { label: 'Features', href: '/#features' },
+    { label: 'Pricing', href: '/#pricing' },
+    { label: 'How It Works', href: '/#' },
   ],
   company: [
-    { label: 'About', href: '/about' },
+    { label: 'About Us', href: '/about' },
     { label: 'Contact', href: '/contact' },
-    { label: 'Blog', href: '#' },
   ],
   legal: [
     { label: 'Privacy Policy', href: '/privacy' },

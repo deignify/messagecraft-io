@@ -16,6 +16,7 @@ interface WebhookMessage {
   video?: { id: string; mime_type: string };
   document?: { id: string; mime_type: string; filename: string };
   location?: { latitude: number; longitude: number; name?: string };
+  contacts?: Array<{ name?: { formatted_name?: string }; phones?: Array<{ phone?: string }> }>;
   interactive?: { type: string; button_reply?: { id: string; title: string }; list_reply?: { id: string; title: string } };
   button?: { text: string; payload: string };
 }
@@ -199,12 +200,12 @@ async function processIncomingMessage(
   })
 
   // Trigger hotel bot automation if hotel exists for this number
-  // Handle text messages and media (images/documents for ID upload)
-  if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document')) {
+  // Handle text messages, media (images/documents), and contacts for ID upload
+  if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document' || message.type === 'contacts')) {
     try {
       console.log('Triggering hotel bot for message:', messageContent, 'type:', message.type)
       
-      // Build media info for image/document uploads
+      // Build media info for image/document/contacts uploads
       let mediaInfo: { type: string; id: string; mime_type: string; filename?: string } | null = null
       if (message.type === 'image' && message.image) {
         mediaInfo = {
@@ -218,6 +219,15 @@ async function processIncomingMessage(
           id: message.document.id,
           mime_type: message.document.mime_type,
           filename: message.document.filename,
+        }
+      } else if (message.type === 'contacts' && message.contacts?.length) {
+        // For contacts, we'll save the vCard data as text
+        // Meta doesn't provide a media ID for contacts, so we handle differently
+        mediaInfo = {
+          type: 'contacts',
+          id: `contact_${Date.now()}`,
+          mime_type: 'text/vcard',
+          filename: 'contact.vcf',
         }
       }
       

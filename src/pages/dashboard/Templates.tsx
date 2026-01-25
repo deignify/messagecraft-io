@@ -59,7 +59,7 @@ export default function Templates() {
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('sync-templates', {
-        body: { whatsappNumberId: selectedNumber.id },
+        body: { whatsapp_number_id: selectedNumber.id },
       });
 
       if (error) throw error;

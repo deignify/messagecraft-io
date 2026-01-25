@@ -130,17 +130,17 @@ Deno.serve(async (req) => {
       .eq('whatsapp_number_id', whatsapp_number_id)
       .not('meta_template_id', 'in', `(${metaTemplateIds.join(',')})`)
 
-    // Upsert all templates
+    // Upsert all templates using composite unique key
     for (const template of templates) {
       const { error } = await supabase
         .from('templates')
         .upsert(template, {
-          onConflict: 'meta_template_id',
+          onConflict: 'whatsapp_number_id,meta_template_id',
           ignoreDuplicates: false,
         })
 
       if (error) {
-        console.error('Failed to upsert template:', error)
+        console.error('Failed to upsert template:', template.name, error)
       }
     }
 

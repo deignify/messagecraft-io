@@ -1,21 +1,23 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { HotelBooking, RoomType, BookingStatus, BOOKING_STATUS_LABELS } from '@/lib/hotel-types';
-import { Search, CalendarCheck, Phone, User, BedDouble, Calendar, Filter } from 'lucide-react';
+import { Search, CalendarCheck, Phone, User, BedDouble, Calendar, Filter, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface BookingManagementProps {
   bookings: HotelBooking[];
   rooms: RoomType[];
   onUpdateStatus: (bookingId: string, status: BookingStatus) => Promise<HotelBooking>;
+  onDelete: (bookingId: string) => Promise<void>;
 }
 
-export function BookingManagement({ bookings, rooms, onUpdateStatus }: BookingManagementProps) {
+export function BookingManagement({ bookings, rooms, onUpdateStatus, onDelete }: BookingManagementProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
 
@@ -176,21 +178,47 @@ export function BookingManagement({ bookings, rooms, onUpdateStatus }: BookingMa
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Select
-                            value={booking.status}
-                            onValueChange={(v) => onUpdateStatus(booking.id, v as BookingStatus)}
-                          >
-                            <SelectTrigger className="w-[130px] h-8">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {Object.entries(BOOKING_STATUS_LABELS).map(([value, { emoji, label }]) => (
-                                <SelectItem key={value} value={value}>
-                                  {emoji} {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={booking.status}
+                              onValueChange={(v) => onUpdateStatus(booking.id, v as BookingStatus)}
+                            >
+                              <SelectTrigger className="w-[130px] h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(BOOKING_STATUS_LABELS).map(([value, { emoji, label }]) => (
+                                  <SelectItem key={value} value={value}>
+                                    {emoji} {label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Booking?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will permanently delete booking "{booking.booking_id}" for {booking.guest_name}. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction 
+                                    onClick={() => onDelete(booking.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

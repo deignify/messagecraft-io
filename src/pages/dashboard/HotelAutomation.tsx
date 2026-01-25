@@ -100,6 +100,7 @@ export default function HotelAutomation() {
             bookings={bookings}
             rooms={rooms}
             onUpdateStatus={hotelActions.updateBookingStatus}
+            onDelete={hotelActions.deleteBooking}
           />
         </TabsContent>
 

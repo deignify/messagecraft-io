@@ -346,6 +346,22 @@ export function useHotel() {
     return bookingWithRoom;
   };
 
+  const deleteBooking = async (bookingId: string) => {
+    const { error } = await supabase
+      .from('hotel_bookings')
+      .delete()
+      .eq('id', bookingId);
+
+    if (error) {
+      console.error('Booking delete error:', error);
+      toast.error('Failed to delete booking');
+      throw error;
+    }
+
+    setBookings(prev => prev.filter(b => b.id !== bookingId));
+    toast.success('Booking deleted successfully');
+  };
+
   // Offers CRUD
   const createOffer = async (data: Partial<HotelOffer>) => {
     if (!hotel) return null;
@@ -405,6 +421,7 @@ export function useHotel() {
     uploadRoomPhoto,
     deleteRoomPhoto,
     updateBookingStatus,
+    deleteBooking,
     createOffer,
     deleteOffer,
   };

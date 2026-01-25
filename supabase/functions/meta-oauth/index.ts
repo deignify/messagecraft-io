@@ -60,12 +60,40 @@ Deno.serve(async (req) => {
       // Must use https and include /functions/v1/ path for Supabase edge functions
       const callbackUri = `https://${url.hostname}/functions/v1/meta-oauth`
       
-      // State contains user ID (if available) and timestamp
-      const state = btoa(JSON.stringify({ 
-        user_id: userId,
-        timestamp: Date.now(),
-        return_url: url.searchParams.get('return_url') || '/'
-      }))
+      // Build a safe return URL back to the app (prefer absolute URL)
+      const returnUrlParam = url.searchParams.get('return_url')
+      const referer = req.headers.get('referer')
+      let returnUrl = returnUrlParam || '/'
+      if (returnUrl.startsWith('/')) {
+        if (referer) {
+          try {
+            returnUrl = new URL(referer).origin + returnUrl
+          } catch {
+            returnUrl = '/'
+          }
+        } else {
+          returnUrl = '/'
+        }
+      }
+
+      // If we don't have a user here, don't send them through Meta only to fail on callback.
+      if (!userId) {
+        const backUrl = new URL(returnUrl, url.origin)
+        backUrl.searchParams.set('error', 'not_authenticated')
+        return new Response(null, {
+          status: 302,
+          headers: { ...corsHeaders, Location: backUrl.toString() },
+        })
+      }
+
+      // State contains user ID and timestamp + where to send the user back to
+      const state = btoa(
+        JSON.stringify({
+          user_id: userId,
+          timestamp: Date.now(),
+          return_url: returnUrl,
+        })
+      )
 
       // Meta OAuth URL with WhatsApp Business Management scope
       const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
@@ -91,12 +119,17 @@ Deno.serve(async (req) => {
     
     if (code && state) {
       // Verify state
-      let stateData: { user_id: string | null; timestamp: number; return_url: string }
+      let stateData: { user_id: string | null; timestamp: number; return_url?: string }
       try {
         stateData = JSON.parse(atob(state))
       } catch {
         throw new Error('Invalid state parameter')
       }
+
+      const returnUrlString =
+        typeof stateData.return_url === 'string' && stateData.return_url.length > 0
+          ? stateData.return_url
+          : '/'
 
       // Check state is not too old (10 minutes)
       if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
@@ -117,7 +150,7 @@ Deno.serve(async (req) => {
 
       if (!tokenResponse.ok || !tokenData.access_token) {
         console.error('Token exchange failed:', tokenData)
-        const returnUrl = new URL(stateData.return_url, url.origin)
+        const returnUrl = new URL(returnUrlString, url.origin)
         returnUrl.searchParams.set('error', 'token_exchange_failed')
         return new Response(null, {
           status: 302,
@@ -147,7 +180,7 @@ Deno.serve(async (req) => {
 
       if (!wabaResponse.ok) {
         console.error('Failed to fetch WABA:', wabaData)
-        const returnUrl = new URL(stateData.return_url, url.origin)
+        const returnUrl = new URL(returnUrlString, url.origin)
         returnUrl.searchParams.set('error', 'waba_fetch_failed')
         return new Response(null, {
           status: 302,
@@ -157,7 +190,7 @@ Deno.serve(async (req) => {
 
       // If we don't have a user_id from state, we can't store - redirect with error
       if (!stateData.user_id) {
-        const returnUrl = new URL(stateData.return_url, url.origin)
+        const returnUrl = new URL(returnUrlString, url.origin)
         returnUrl.searchParams.set('error', 'not_authenticated')
         return new Response(null, {
           status: 302,
@@ -201,7 +234,7 @@ Deno.serve(async (req) => {
       }
 
       // Redirect back to app with success
-      const returnUrl = new URL(stateData.return_url, url.origin)
+      const returnUrl = new URL(returnUrlString, url.origin)
       returnUrl.searchParams.set('success', 'true')
       returnUrl.searchParams.set('numbers', String(numbersStored))
       return new Response(null, {
@@ -233,16 +266,34 @@ Deno.serve(async (req) => {
 
       const body = await req.json()
       const redirectUri = body.redirect_uri
+      const returnUrlParam = body.return_url
 
       if (!redirectUri) {
         throw new Error('redirect_uri is required')
       }
 
-      // State contains user ID for verification after callback
-      const stateValue = btoa(JSON.stringify({ 
-        user_id: claimsData.user.id,
-        timestamp: Date.now() 
-      }))
+      // Store return_url in state so the GET callback can redirect back to the app
+      const referer = req.headers.get('referer')
+      let returnUrl = typeof returnUrlParam === 'string' ? returnUrlParam : '/'
+      if (returnUrl.startsWith('/')) {
+        if (referer) {
+          try {
+            returnUrl = new URL(referer).origin + returnUrl
+          } catch {
+            returnUrl = '/'
+          }
+        } else {
+          returnUrl = '/'
+        }
+      }
+
+      const stateValue = btoa(
+        JSON.stringify({
+          user_id: claimsData.user.id,
+          timestamp: Date.now(),
+          return_url: returnUrl,
+        })
+      )
 
       // Meta OAuth URL with WhatsApp Business Management scope
       const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')

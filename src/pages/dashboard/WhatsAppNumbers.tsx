@@ -85,14 +85,34 @@ export default function WhatsAppNumbers() {
       return;
     }
 
-    // Build OAuth URL with return path
+    // Generate the Meta OAuth URL via an authenticated call (so the backend can embed user_id in state)
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
-    const returnUrl = encodeURIComponent('/dashboard/whatsapp-numbers');
-    const oauthUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth?action=initiate&return_url=${returnUrl}`;
-    
-    // We need to pass the auth token via a form or cookie since we're redirecting
-    // For now, redirect directly - the edge function will handle re-auth on callback
-    window.location.href = oauthUrl;
+    const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+    const returnUrl = `${window.location.origin}/dashboard/whatsapp-numbers`;
+
+    try {
+      const res = await fetch(`${functionBaseUrl}?action=get-auth-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          redirect_uri: functionBaseUrl,
+          return_url: returnUrl,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.auth_url) {
+        throw new Error(data?.error || 'Failed to start Meta OAuth');
+      }
+
+      window.location.href = data.auth_url;
+    } catch (err) {
+      console.error('Failed to start Meta OAuth:', err);
+      toast.error('Failed to start Meta OAuth. Please try again.');
+    }
   };
 
   return (

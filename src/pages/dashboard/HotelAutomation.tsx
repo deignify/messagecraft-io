@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
 import { useHotel } from '@/hooks/useHotel';
 import { HotelSetup } from '@/components/hotel/HotelSetup';
@@ -7,7 +8,8 @@ import { RoomManagement } from '@/components/hotel/RoomManagement';
 import { BookingManagement } from '@/components/hotel/BookingManagement';
 import { OfferManagement } from '@/components/hotel/OfferManagement';
 import { HotelBotPreview } from '@/components/hotel/HotelBotPreview';
-import { Building2, BedDouble, CalendarCheck, Megaphone, MessageSquare, Loader2 } from 'lucide-react';
+import { Building2, BedDouble, CalendarCheck, Megaphone, MessageSquare, Loader2, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function HotelAutomation() {
   const { selectedNumber } = useWhatsApp();
@@ -35,12 +37,19 @@ export default function HotelAutomation() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">🏨 Hotel Automation</h1>
-        <p className="text-muted-foreground">
-          Complete WhatsApp bot for hotel bookings, room info, and guest management
-        </p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" asChild>
+          <Link to="/dashboard/automation">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold">🏨 Hotel Automation</h1>
+          <p className="text-muted-foreground">
+            Complete WhatsApp bot for hotel bookings, room info, and guest management
+          </p>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

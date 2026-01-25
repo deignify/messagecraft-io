@@ -17,6 +17,7 @@ import WhatsAppNumbers from "./pages/dashboard/WhatsAppNumbers";
 import LiveChat from "./pages/dashboard/LiveChat";
 import Contacts from "./pages/dashboard/Contacts";
 import Templates from "./pages/dashboard/Templates";
+import Automation from "./pages/dashboard/Automation";
 import HotelAutomation from "./pages/dashboard/HotelAutomation";
 import SettingsPage from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
@@ -48,7 +49,8 @@ const App = () => (
                 <Route path="chat" element={<LiveChat />} />
                 <Route path="contacts" element={<Contacts />} />
                 <Route path="templates" element={<Templates />} />
-                <Route path="automation" element={<HotelAutomation />} />
+                <Route path="automation" element={<Automation />} />
+                <Route path="automation/hotel" element={<HotelAutomation />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
               

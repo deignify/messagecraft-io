@@ -53,91 +53,6 @@ async function sendWhatsAppMessage(
   }
 }
 
-// Send interactive list message
-async function sendInteractiveList(
-  phoneNumberId: string,
-  accessToken: string,
-  to: string,
-  headerText: string,
-  bodyText: string,
-  buttonText: string,
-  sections: Array<{ title: string; rows: Array<{ id: string; title: string; description?: string }> }>
-): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to,
-          type: 'interactive',
-          interactive: {
-            type: 'list',
-            header: { type: 'text', text: headerText },
-            body: { text: bodyText },
-            action: {
-              button: buttonText,
-              sections,
-            },
-          },
-        }),
-      }
-    )
-    return response.ok
-  } catch (error) {
-    console.error('Error sending interactive list:', error)
-    return false
-  }
-}
-
-// Send interactive button message
-async function sendInteractiveButtons(
-  phoneNumberId: string,
-  accessToken: string,
-  to: string,
-  bodyText: string,
-  buttons: Array<{ id: string; title: string }>
-): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to,
-          type: 'interactive',
-          interactive: {
-            type: 'button',
-            body: { text: bodyText },
-            action: {
-              buttons: buttons.map(b => ({
-                type: 'reply',
-                reply: { id: b.id, title: b.title },
-              })),
-            },
-          },
-        }),
-      }
-    )
-    return response.ok
-  } catch (error) {
-    console.error('Error sending interactive buttons:', error)
-    return false
-  }
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -168,8 +83,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Ensure we have an automation record for the Hotel Bot.
-    // This is required because automation_sessions.automation_id is NOT NULL.
+    // Ensure we have an automation record for the Hotel Bot
     const HOTEL_BOT_AUTOMATION_NAME = 'Hotel Bot'
 
     const { data: existingAutomation } = await supabase
@@ -204,12 +118,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Get or create bot session (persisted) so numbered replies work.
+    // Get or create bot session
     let session: BotSession = { state: 'welcome', data: {} }
     let sessionRowId: string | null = null
 
     if (hotelBotAutomationId) {
-      // Check for existing session in automation_sessions
       const { data: existingSession } = await supabase
         .from('automation_sessions')
         .select('session_data, id')
@@ -248,11 +161,10 @@ Deno.serve(async (req) => {
     const msg = message_text.toLowerCase().trim()
     let response = ''
     let newState = session.state
-    let handled = false
 
     // Helper function to show main menu
     const getMainMenuResponse = () => {
-      let menuText = `🏨 *${hotel.name}*\n\n`
+      let menuText = `🏨 *Welcome to ${hotel.name}*\n\n`
       menuText += `Reply with a number:\n\n`
       menuText += `1️⃣ Hotel Information\n`
       menuText += `2️⃣ Room Types & Pricing\n`
@@ -275,148 +187,159 @@ Deno.serve(async (req) => {
       return rooms || []
     }
 
-    // MAIN MENU SHORTCUTS - These work from ANY state
-    // 0 = menu, 1 = hotel info, 2 = rooms, 3 = booking, 4 = location, 5 = contact, 6 = check status
-    const isMenuTrigger = ['hi', 'hello', 'menu', 'start', 'hey', 'hii', '0', 'back'].includes(msg)
+    // States that are in middle of data collection - do NOT allow menu shortcuts
+    const dataCollectionStates = [
+      'booking_name', 'booking_checkin', 'booking_checkout', 
+      'booking_guests', 'booking_rooms', 'booking_confirm', 
+      'check_booking'
+    ]
     
-    if (isMenuTrigger) {
+    const isInDataCollection = dataCollectionStates.includes(session.state)
+    
+    // Check for menu reset (0, menu, back) - always works
+    const isMenuReset = ['0', 'menu', 'back'].includes(msg)
+    
+    // Check for initial greeting - only works when not in data collection
+    const isGreeting = ['hi', 'hello', 'start', 'hey', 'hii'].includes(msg)
+    
+    // Process message based on current state
+    
+    // RESET: 0/menu/back always returns to main menu
+    if (isMenuReset) {
       response = getMainMenuResponse()
       newState = 'main_menu'
-      session.data = {} // Clear any ongoing flow
-      handled = true
+      session.data = {}
     }
-    else if (msg === '1') {
-      // Hotel Information - works from any state
-      response = `🏨 *${hotel.name}*\n\n`
-      if (hotel.description) response += `${hotel.description}\n\n`
-      if (hotel.phone) response += `📞 Phone: ${hotel.phone}\n`
-      if (hotel.email) response += `📧 Email: ${hotel.email}\n`
-      if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
-      if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
-      if (hotel.languages?.length) response += `🗣️ Languages: ${hotel.languages.join(', ')}\n`
-      if (hotel.cancellation_policy) response += `\n📋 *Cancellation Policy:*\n${hotel.cancellation_policy}\n`
-      response += `\n_Reply 0 for menu_`
+    // GREETING: Only when not in data collection
+    else if (isGreeting && !isInDataCollection) {
+      response = getMainMenuResponse()
       newState = 'main_menu'
-      handled = true
+      session.data = {}
     }
-    else if (msg === '2') {
-      // View Rooms - works from any state
-      const rooms = await fetchRooms()
-      if (!rooms.length) {
-        response = `😔 No rooms available at the moment.\n\n_Reply 0 for menu_`
-      } else {
-        response = `🛏️ *Room Types - ${hotel.name}*\n\n`
-        rooms.forEach((room) => {
-          response += `*${room.name}*\n`
-          response += `₹${room.base_price || 'N/A'}/night • Max ${room.max_adults} guests`
-          response += `\n\n`
-        })
-        response += `_Reply 3 to book, 1 for info, 0 for menu_`
+    // MAIN MENU or WELCOME state - process menu options
+    else if (session.state === 'welcome' || session.state === 'main_menu') {
+      switch (msg) {
+        case '1': // Hotel Information
+          response = `🏨 *${hotel.name}*\n\n`
+          if (hotel.description) response += `${hotel.description}\n\n`
+          if (hotel.phone) response += `📞 Phone: ${hotel.phone}\n`
+          if (hotel.email) response += `📧 Email: ${hotel.email}\n`
+          if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
+          if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
+          if (hotel.languages?.length) response += `🗣️ Languages: ${hotel.languages.join(', ')}\n`
+          if (hotel.cancellation_policy) response += `\n📋 *Cancellation Policy:*\n${hotel.cancellation_policy}\n`
+          response += `\n_Reply 0 for menu_`
+          newState = 'main_menu'
+          break
+          
+        case '2': // View Rooms
+          const rooms = await fetchRooms()
+          if (!rooms.length) {
+            response = `😔 No rooms available at the moment.\n\n_Reply 0 for menu_`
+          } else {
+            response = `🛏️ *Room Types - ${hotel.name}*\n\n`
+            rooms.forEach((room) => {
+              response += `*${room.name}*\n`
+              response += `₹${room.base_price || 'N/A'}/night • Max ${room.max_adults} guests`
+              if (room.amenities?.length) {
+                response += `\n✨ ${room.amenities.slice(0, 3).join(', ')}`
+              }
+              response += `\n\n`
+            })
+            response += `_Reply 3 to book, 1 for info, 0 for menu_`
+          }
+          newState = 'main_menu'
+          break
+          
+        case '3': // Start Booking
+          response = `📅 *Booking Inquiry*\n\nPlease enter your *full name*:`
+          newState = 'booking_name'
+          session.data = {}
+          break
+          
+        case '4': // Location
+          response = `📍 *Hotel Address & Location*\n\n`
+          if (hotel.address) response += `🏨 ${hotel.address}\n\n`
+          if (hotel.google_maps_link) response += `🗺️ Google Maps:\n${hotel.google_maps_link}\n\n`
+          else response += `📍 Contact us for directions.\n\n`
+          response += `_Reply 0 for menu_`
+          newState = 'main_menu'
+          break
+          
+        case '5': // Contact Us
+          response = `📞 *Contact Us*\n\n`
+          if (hotel.phone) response += `📱 Phone: ${hotel.phone}\n`
+          if (hotel.email) response += `📧 Email: ${hotel.email}\n`
+          if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
+          if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
+          response += `\n💬 You can also chat with us right here!\n`
+          response += `\n_Reply 0 for menu_`
+          newState = 'main_menu'
+          break
+          
+        case '6': // Check Booking Status
+          response = `🔍 *Check Booking Status*\n\nPlease enter your Booking ID:`
+          newState = 'check_booking'
+          break
+          
+        default:
+          // Unknown input at main menu - show menu again
+          response = getMainMenuResponse()
+          newState = 'main_menu'
       }
-      newState = 'main_menu'
-      handled = true
     }
-    else if (msg === '3') {
-      // Start Booking Inquiry - works from any state
-      response = `📅 *Booking Inquiry*\n\nPlease enter your *full name*:`
-      newState = 'booking_name'
-      session.data = {} // Reset booking data
-      handled = true
-    }
-    else if (msg === '4') {
-      // Location - works from any state
-      response = `📍 *Hotel Address & Location*\n\n`
-      if (hotel.address) response += `🏨 ${hotel.address}\n\n`
-      if (hotel.google_maps_link) response += `🗺️ Google Maps:\n${hotel.google_maps_link}\n\n`
-      else response += `📍 Contact us for directions.\n\n`
-      response += `_Reply 0 for menu_`
-      newState = 'main_menu'
-      handled = true
-    }
-    else if (msg === '5') {
-      // Contact Us - works from any state
-      response = `📞 *Contact Us*\n\n`
-      if (hotel.phone) response += `📱 Phone: ${hotel.phone}\n`
-      if (hotel.email) response += `📧 Email: ${hotel.email}\n`
-      if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
-      if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
-      response += `\n💬 You can also chat with us right here!\n`
-      response += `\n_Reply 0 for menu_`
-      newState = 'main_menu'
-      handled = true
-    }
-    else if (msg === '6') {
-      // Check Booking Status - works from any state
-      response = `🔍 *Check Booking Status*\n\nPlease enter your Booking ID:`
-      newState = 'check_booking'
-      handled = true
-    }
-    else if (session.state === 'welcome') {
-      // First time user - show menu
-      response = getMainMenuResponse()
-      newState = 'main_menu'
-      handled = true
-    }
-    // Booking flow - collect guest name
-    if (!handled && session.state === 'booking_name') {
+    // BOOKING FLOW: Name
+    else if (session.state === 'booking_name') {
       const guestName = message_text.trim()
       if (guestName.length >= 2) {
         session.data.guest_name = guestName
         response = `Thank you, *${guestName}*!\n\nPlease enter your *check-in date* (DD/MM/YYYY):`
         newState = 'booking_checkin'
-        handled = true
       } else {
         response = `❌ Please enter a valid name (at least 2 characters)`
-        handled = true
       }
     }
-    // Booking flow - collect check-in date
-    if (!handled && session.state === 'booking_checkin') {
+    // BOOKING FLOW: Check-in date
+    else if (session.state === 'booking_checkin') {
       const dateMatch = message_text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/)
       if (dateMatch) {
         let [, day, month, year] = dateMatch
         if (year.length === 2) year = '20' + year
-        session.data.check_in = `${day}/${month}/${year}`
+        session.data.check_in = `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`
         session.data.check_in_db = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-        response = `Check-in: *${day}/${month}/${year}*\n\nPlease enter your *check-out date* (DD/MM/YYYY):`
+        response = `Check-in: *${session.data.check_in}*\n\nPlease enter your *check-out date* (DD/MM/YYYY):`
         newState = 'booking_checkout'
-        handled = true
       } else {
         response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 15/02/2026)`
-        handled = true
       }
     }
-    // Booking flow - collect check-out date
-    if (!handled && session.state === 'booking_checkout') {
+    // BOOKING FLOW: Check-out date
+    else if (session.state === 'booking_checkout') {
       const dateMatch = message_text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/)
       if (dateMatch) {
         let [, day, month, year] = dateMatch
         if (year.length === 2) year = '20' + year
-        session.data.check_out = `${day}/${month}/${year}`
+        session.data.check_out = `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`
         session.data.check_out_db = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-        response = `Check-out: *${day}/${month}/${year}*\n\nHow many *guests* will be staying?`
+        response = `Check-out: *${session.data.check_out}*\n\nHow many *guests* will be staying?`
         newState = 'booking_guests'
-        handled = true
       } else {
         response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 17/02/2026)`
-        handled = true
       }
     }
-    // Booking flow - collect guests count
-    if (!handled && session.state === 'booking_guests') {
+    // BOOKING FLOW: Guests count
+    else if (session.state === 'booking_guests') {
       const guests = parseInt(msg)
       if (!isNaN(guests) && guests >= 1 && guests <= 20) {
         session.data.guests = guests
         response = `*${guests}* guest(s) noted.\n\nHow many *rooms* do you need?`
         newState = 'booking_rooms'
-        handled = true
       } else {
         response = `❌ Please enter a valid number of guests (1-20)`
-        handled = true
       }
     }
-    // Booking flow - collect rooms count and show summary
-    if (!handled && session.state === 'booking_rooms') {
+    // BOOKING FLOW: Rooms count and show summary
+    else if (session.state === 'booking_rooms') {
       const rooms = parseInt(msg)
       if (!isNaN(rooms) && rooms >= 1 && rooms <= 10) {
         session.data.rooms = rooms
@@ -428,14 +351,12 @@ Deno.serve(async (req) => {
         response += `🛏️ Rooms: ${rooms}\n\n`
         response += `Reply *YES* to confirm or *CANCEL* to cancel.`
         newState = 'booking_confirm'
-        handled = true
       } else {
         response = `❌ Please enter a valid number of rooms (1-10)`
-        handled = true
       }
     }
-    // Booking flow - confirm or cancel
-    if (!handled && session.state === 'booking_confirm') {
+    // BOOKING FLOW: Confirm or cancel
+    else if (session.state === 'booking_confirm') {
       if (msg === 'yes' || msg === 'confirm') {
         // Generate booking ID
         const { data: bookingIdData } = await supabase.rpc('generate_booking_id', { hotel_name: hotel.name })
@@ -449,7 +370,6 @@ Deno.serve(async (req) => {
           response = `❌ Sorry, no rooms available. Please contact us directly.\n\n_Reply 0 for menu_`
           newState = 'main_menu'
           session.data = {}
-          handled = true
         } else {
           // Create booking
           const { error: bookingError } = await supabase.from('hotel_bookings').insert({
@@ -483,21 +403,18 @@ Deno.serve(async (req) => {
             response += `_Reply 0 for menu_`
           }
           newState = 'main_menu'
-          session.data = {} // Clear booking data
-          handled = true
+          session.data = {}
         }
       } else if (msg === 'cancel' || msg === 'no') {
         response = `❌ Booking cancelled.\n\n_Reply 0 for menu_`
         newState = 'main_menu'
         session.data = {}
-        handled = true
       } else {
         response = `Reply *YES* to confirm or *CANCEL* to cancel.`
-        handled = true
       }
     }
-    // Check booking status flow
-    if (!handled && session.state === 'check_booking') {
+    // CHECK BOOKING STATUS
+    else if (session.state === 'check_booking') {
       const bookingIdInput = message_text.trim().toUpperCase()
       
       const { data: booking } = await supabase
@@ -537,11 +454,9 @@ Deno.serve(async (req) => {
         response = `❌ Booking ID *${bookingIdInput}* not found.\n\nPlease check your ID and try again.\n\n_Reply 0 for menu_`
       }
       newState = 'main_menu'
-      handled = true
     }
-
-    // Default fallback - show menu for any unrecognized input
-    if (!handled) {
+    // DEFAULT: Unknown state - show menu
+    else {
       response = getMainMenuResponse()
       newState = 'main_menu'
     }

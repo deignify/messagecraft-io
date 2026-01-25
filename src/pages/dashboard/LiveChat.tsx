@@ -26,10 +26,18 @@ import {
   Paperclip,
   X,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Conversation, Message } from '@/lib/supabase-types';
-import { format, isToday, isYesterday } from 'date-fns';
+import type { Conversation, Message, Template } from '@/lib/supabase-types';
+import { format, isToday, isYesterday, differenceInHours } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 export default function LiveChat() {
   const { user } = useAuth();
@@ -46,6 +54,12 @@ export default function LiveChat() {
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 24-hour window state
+  const [showTemplateDialog, setShowTemplateDialog] = useState(false);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [isOutsideWindow, setIsOutsideWindow] = useState(false);
 
   // Fetch conversations
   useEffect(() => {
@@ -93,6 +107,52 @@ export default function LiveChat() {
       supabase.removeChannel(channel);
     };
   }, [selectedNumber, user]);
+
+  // Fetch templates for 24-hour window fallback
+  useEffect(() => {
+    if (!selectedNumber || !user) return;
+
+    const fetchTemplates = async () => {
+      const { data, error } = await supabase
+        .from('templates')
+        .select('*')
+        .eq('whatsapp_number_id', selectedNumber.id)
+        .eq('status', 'APPROVED')
+        .order('name', { ascending: true });
+
+      if (!error && data) {
+        setTemplates(data as Template[]);
+      }
+    };
+
+    fetchTemplates();
+  }, [selectedNumber, user]);
+
+  // Check 24-hour window when conversation or messages change
+  useEffect(() => {
+    if (!selectedConversation || !messages.length) {
+      setIsOutsideWindow(false);
+      return;
+    }
+
+    // Find the last inbound message
+    const lastInboundMessage = [...messages]
+      .reverse()
+      .find(m => m.direction === 'inbound');
+
+    if (!lastInboundMessage) {
+      // No inbound messages, outside window
+      setIsOutsideWindow(true);
+      return;
+    }
+
+    const hoursSinceLastInbound = differenceInHours(
+      new Date(),
+      new Date(lastInboundMessage.created_at)
+    );
+
+    setIsOutsideWindow(hoursSinceLastInbound >= 24);
+  }, [selectedConversation, messages]);
 
   // Fetch messages for selected conversation
   useEffect(() => {
@@ -221,6 +281,16 @@ export default function LiveChat() {
   const handleSendMessage = async () => {
     if ((!newMessage.trim() && !selectedFile) || !selectedConversation || !selectedNumber || !user) return;
 
+    // Check 24-hour window - if outside, show template dialog
+    if (isOutsideWindow && !selectedFile) {
+      if (templates.length === 0) {
+        toast.error('No approved templates available. Sync templates first to message outside the 24-hour window.');
+        return;
+      }
+      setShowTemplateDialog(true);
+      return;
+    }
+
     setSending(true);
     setUploadingMedia(!!selectedFile);
 
@@ -262,6 +332,39 @@ export default function LiveChat() {
     } finally {
       setSending(false);
       setUploadingMedia(false);
+    }
+  };
+
+  // Send template message
+  const handleSendTemplate = async (template: Template) => {
+    if (!selectedConversation || !selectedNumber || !user) return;
+
+    setSending(true);
+    setShowTemplateDialog(false);
+
+    try {
+      const { error } = await supabase.functions.invoke('send-message', {
+        body: {
+          whatsapp_number_id: selectedNumber.id,
+          to: selectedConversation.contact_phone,
+          message_type: 'template',
+          template_name: template.name,
+          template_language: template.language,
+        },
+      });
+
+      if (error) {
+        toast.error('Failed to send template');
+        console.error('Error sending template:', error);
+      } else {
+        toast.success('Template sent successfully');
+        setNewMessage('');
+      }
+    } catch (error) {
+      console.error('Error sending template:', error);
+      toast.error('Failed to send template');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -526,6 +629,27 @@ export default function LiveChat() {
 
             {/* Message Input */}
             <div className="p-2 md:p-4 border-t border-border bg-card space-y-2 md:space-y-3">
+              {/* 24-hour window warning */}
+              {isOutsideWindow && (
+                <div className="flex items-center gap-2 p-2 md:p-3 bg-status-pending/10 border border-status-pending/20 rounded-lg text-status-pending">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <p className="text-xs md:text-sm">
+                    24-hour window expired. Use a template message to re-engage.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto flex-shrink-0 h-7 text-xs"
+                    onClick={() => setShowTemplateDialog(true)}
+                    disabled={templates.length === 0}
+                  >
+                    <FileText className="h-3 w-3 mr-1" />
+                    Send Template
+                  </Button>
+                </div>
+              )}
+
               {/* File Preview */}
               {selectedFile && (
                 <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-muted rounded-lg">
@@ -658,6 +782,51 @@ export default function LiveChat() {
           </div>
         </div>
       )}
+
+      {/* Template Selection Dialog */}
+      <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Select a Template</DialogTitle>
+            <DialogDescription>
+              The 24-hour messaging window has expired. Choose an approved template to re-engage this contact.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            <div className="space-y-3 py-2">
+              {templates.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No approved templates available</p>
+                  <p className="text-xs mt-1">Sync templates from Meta first</p>
+                </div>
+              ) : (
+                templates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="p-3 border border-border rounded-lg hover:border-primary/50 cursor-pointer transition-colors"
+                    onClick={() => handleSendTemplate(template)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-foreground text-sm">{template.name}</h4>
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        {template.language}
+                      </span>
+                    </div>
+                    {template.components && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {Array.isArray(template.components)
+                          ? (template.components as any[]).find((c: any) => c.type === 'BODY')?.text || 'No body text'
+                          : 'No body text'}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

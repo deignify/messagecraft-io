@@ -67,6 +67,7 @@ export interface HotelBooking {
   feedback_requested: boolean;
   feedback_rating?: number;
   feedback_comment?: string;
+  id_documents?: string[]; // Array of storage paths for ID uploads
   created_at: string;
   updated_at: string;
   // Joined data

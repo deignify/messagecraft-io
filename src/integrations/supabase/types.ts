@@ -292,6 +292,7 @@ export type Database = {
           guest_whatsapp_phone: string | null
           hotel_id: string
           id: string
+          id_documents: string[] | null
           notes: string | null
           reminder_sent_checkin: boolean | null
           reminder_sent_checkout: boolean | null
@@ -315,6 +316,7 @@ export type Database = {
           guest_whatsapp_phone?: string | null
           hotel_id: string
           id?: string
+          id_documents?: string[] | null
           notes?: string | null
           reminder_sent_checkin?: boolean | null
           reminder_sent_checkout?: boolean | null
@@ -338,6 +340,7 @@ export type Database = {
           guest_whatsapp_phone?: string | null
           hotel_id?: string
           id?: string
+          id_documents?: string[] | null
           notes?: string | null
           reminder_sent_checkin?: boolean | null
           reminder_sent_checkout?: boolean | null

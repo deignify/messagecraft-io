@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { MoreVertical, Pencil, Trash2, Eye, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Eye, CheckCircle2, Clock, XCircle, Send, FileCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MessageTemplate } from '@/lib/template-types';
 import { useState } from 'react';
@@ -26,10 +26,13 @@ interface TemplateCardProps {
   onEdit: (template: MessageTemplate) => void;
   onDelete: (id: string) => void;
   onPreview: (template: MessageTemplate) => void;
+  onSubmitForReview: (id: string) => void;
+  onSend?: (template: MessageTemplate) => void;
 }
 
-export function TemplateCard({ template, onEdit, onDelete, onPreview }: TemplateCardProps) {
+export function TemplateCard({ template, onEdit, onDelete, onPreview, onSubmitForReview, onSend }: TemplateCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -121,6 +124,24 @@ export function TemplateCard({ template, onEdit, onDelete, onPreview }: Template
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit
               </DropdownMenuItem>
+              {template.status === 'draft' && (
+                <DropdownMenuItem
+                  onClick={() => setShowSubmitDialog(true)}
+                  className="text-primary focus:text-primary"
+                >
+                  <FileCheck className="h-4 w-4 mr-2" />
+                  Submit for Review
+                </DropdownMenuItem>
+              )}
+              {template.status === 'approved' && onSend && (
+                <DropdownMenuItem
+                  onClick={() => onSend(template)}
+                  className="text-status-active focus:text-status-active"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Send Template
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => setShowDeleteDialog(true)}
                 className="text-destructive focus:text-destructive"
@@ -161,6 +182,30 @@ export function TemplateCard({ template, onEdit, onDelete, onPreview }: Template
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Submit for Review Dialog */}
+      <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit for Review</AlertDialogTitle>
+            <AlertDialogDescription>
+              Submit "{template.template_name}" for approval? Once submitted, you won't be able to edit it until it's approved or rejected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onSubmitForReview(template.id);
+                setShowSubmitDialog(false);
+              }}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              Submit for Review
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -46,6 +46,7 @@ export default function Templates() {
     createTemplate,
     updateTemplate,
     deleteTemplate,
+    submitForReview,
   } = useMessageTemplates();
 
   // Form and preview state
@@ -181,11 +182,22 @@ export default function Templates() {
     setShowPreview(true);
   };
 
-  const handleFormSubmit = async (data: CreateTemplateInput) => {
+  const handleFormSubmit = async (data: CreateTemplateInput, submitForReviewFlag?: boolean) => {
     if (editingTemplate) {
       return await updateTemplate(editingTemplate.id, data as UpdateTemplateInput);
     }
-    return await createTemplate(data);
+    return await createTemplate(data, submitForReviewFlag);
+  };
+
+  const handleSubmitForReview = async (id: string) => {
+    await submitForReview(id);
+  };
+
+  const handleSendTemplate = (template: MessageTemplate) => {
+    toast({
+      title: 'Send Template',
+      description: `Ready to send "${template.template_name}" - Coming soon!`,
+    });
   };
 
   if (!selectedNumber) {
@@ -280,6 +292,8 @@ export default function Templates() {
                   onEdit={handleEditTemplate}
                   onDelete={deleteTemplate}
                   onPreview={handlePreviewTemplate}
+                  onSubmitForReview={handleSubmitForReview}
+                  onSend={handleSendTemplate}
                 />
               ))}
             </div>

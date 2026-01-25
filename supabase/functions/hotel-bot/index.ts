@@ -25,7 +25,7 @@ async function sendWhatsAppMessage(
   accessToken: string,
   to: string,
   message: string
-): Promise<boolean> {
+): Promise<{ success: boolean; waMessageId?: string }> {
   try {
     const response = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
@@ -46,10 +46,12 @@ async function sendWhatsAppMessage(
     )
     const result = await response.json()
     console.log('WhatsApp send result:', result)
-    return response.ok
+    
+    const waMessageId = result?.messages?.[0]?.id
+    return { success: response.ok, waMessageId }
   } catch (error) {
     console.error('Error sending WhatsApp message:', error)
-    return false
+    return { success: false }
   }
 }
 
@@ -471,7 +473,39 @@ Deno.serve(async (req) => {
     }
 
     // Send response via WhatsApp
-    await sendWhatsAppMessage(phone_number_id, access_token, from_phone, response)
+    const { success: sendSuccess, waMessageId } = await sendWhatsAppMessage(phone_number_id, access_token, from_phone, response)
+
+    // Get or create conversation for this contact
+    const { data: conversation } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('whatsapp_number_id', whatsapp_number_id)
+      .eq('contact_phone', from_phone)
+      .maybeSingle()
+
+    if (conversation) {
+      // Save bot message to messages table so it appears in LiveChat
+      await supabase.from('messages').insert({
+        conversation_id: conversation.id,
+        whatsapp_number_id,
+        user_id: hotel.user_id,
+        direction: 'outbound',
+        type: 'text',
+        content: response,
+        status: sendSuccess ? 'sent' : 'failed',
+        wa_message_id: waMessageId || null,
+        sent_at: new Date().toISOString(),
+      })
+
+      // Update conversation with last message
+      await supabase
+        .from('conversations')
+        .update({
+          last_message_text: response.substring(0, 100),
+          last_message_at: new Date().toISOString(),
+        })
+        .eq('id', conversation.id)
+    }
 
     return new Response(JSON.stringify({ success: true, response }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

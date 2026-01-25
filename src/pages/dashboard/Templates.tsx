@@ -182,11 +182,12 @@ export default function Templates() {
     setShowPreview(true);
   };
 
-  const handleFormSubmit = async (data: CreateTemplateInput, submitForReviewFlag?: boolean) => {
+  const handleFormSubmit = async (data: CreateTemplateInput) => {
     if (editingTemplate) {
       return await updateTemplate(editingTemplate.id, data as UpdateTemplateInput);
     }
-    return await createTemplate(data, submitForReviewFlag);
+    // Always submit for review directly
+    return await createTemplate(data, true);
   };
 
   const handleSubmitForReview = async (id: string) => {
@@ -216,6 +217,28 @@ export default function Templates() {
     );
   }
 
+  const allTemplates = [
+    ...filteredCustomTemplates,
+  ];
+
+  const handleCreateSampleTemplate = async () => {
+    const sampleData: CreateTemplateInput = {
+      template_name: 'welcome_message',
+      category: 'utility',
+      language: 'en',
+      header_type: 'text',
+      header_text: 'Welcome to Our Service!',
+      body_text: 'Hello {{1}}, thank you for joining us! Your account has been created successfully. Your reference number is {{2}}.',
+      footer_text: 'Reply STOP to unsubscribe',
+      variables: { '1': 'Customer Name', '2': 'Reference Number' },
+      buttons: [
+        { type: 'quick_reply', text: 'Get Started' },
+        { type: 'url', text: 'Visit Website', url: 'https://example.com' },
+      ],
+    };
+    await createTemplate(sampleData, true);
+  };
+
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -225,156 +248,143 @@ export default function Templates() {
             Message Templates
           </h1>
           <p className="text-muted-foreground mt-1">
-            Create custom templates or sync from Meta
+            Create and manage your WhatsApp message templates
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={handleCreateSampleTemplate} disabled={saving}>
+            <FileText className="h-4 w-4" />
+            Sample Template
+          </Button>
+          <Button variant="hero" onClick={handleCreateTemplate}>
+            <Plus className="h-4 w-4" />
+            Create Template
+          </Button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search templates..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      {/* Search and Sync */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button variant="outline" onClick={handleSyncTemplates} disabled={syncing}>
+          <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+          {syncing ? 'Syncing...' : 'Sync from Meta'}
+        </Button>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="custom" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="custom">
-            Custom Templates ({customTemplates.length})
-          </TabsTrigger>
-          <TabsTrigger value="synced">
-            Meta Templates ({syncedTemplates.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Custom Templates Tab */}
-        <TabsContent value="custom" className="space-y-4 mt-6">
-          <div className="flex justify-end">
-            <Button variant="hero" onClick={handleCreateTemplate}>
-              <Plus className="h-4 w-4" />
+      {/* Templates List */}
+      {(loadingCustom || loadingSynced) ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : (allTemplates.length === 0 && filteredSyncedTemplates.length === 0) ? (
+        <div className="bg-card rounded-xl border border-border p-12 text-center">
+          <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <h2 className="text-xl font-semibold text-foreground mb-2">
+            No templates yet
+          </h2>
+          <p className="text-muted-foreground mb-6">
+            Create your first template or sync from Meta to get started
+          </p>
+          <div className="flex items-center justify-center gap-3">
+            <Button variant="outline" onClick={handleCreateSampleTemplate} disabled={saving}>
+              <FileText className="h-4 w-4 mr-2" />
+              Sample Template
+            </Button>
+            <Button onClick={handleCreateTemplate}>
+              <Plus className="h-4 w-4 mr-2" />
               Create Template
             </Button>
           </div>
-
-          {loadingCustom ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : filteredCustomTemplates.length === 0 ? (
-            <div className="bg-card rounded-xl border border-border p-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                {customTemplates.length === 0 ? 'No custom templates yet' : 'No matching templates'}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Custom Templates Section */}
+          {allTemplates.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Your Templates ({allTemplates.length})
               </h2>
-              <p className="text-muted-foreground mb-6">
-                {customTemplates.length === 0
-                  ? 'Create your first template to get started'
-                  : 'Try adjusting your search query'}
-              </p>
-              {customTemplates.length === 0 && (
-                <Button onClick={handleCreateTemplate}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Template
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {filteredCustomTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  template={template}
-                  onEdit={handleEditTemplate}
-                  onDelete={deleteTemplate}
-                  onPreview={handlePreviewTemplate}
-                  onSubmitForReview={handleSubmitForReview}
-                  onSend={handleSendTemplate}
-                />
-              ))}
+              <div className="grid gap-4">
+                {allTemplates.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={template}
+                    onEdit={handleEditTemplate}
+                    onDelete={deleteTemplate}
+                    onPreview={handlePreviewTemplate}
+                    onSubmitForReview={handleSubmitForReview}
+                    onSend={handleSendTemplate}
+                  />
+                ))}
+              </div>
             </div>
           )}
-        </TabsContent>
 
-        {/* Synced Templates Tab */}
-        <TabsContent value="synced" className="space-y-4 mt-6">
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={handleSyncTemplates} disabled={syncing}>
-              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-              {syncing ? 'Syncing...' : 'Sync from Meta'}
-            </Button>
-          </div>
-
-          {loadingSynced ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : filteredSyncedTemplates.length === 0 ? (
-            <div className="bg-card rounded-xl border border-border p-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold text-foreground mb-2">
-                {syncedTemplates.length === 0 ? 'No templates found' : 'No matching templates'}
+          {/* Meta Templates Section */}
+          {filteredSyncedTemplates.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-foreground">
+                Meta Templates ({filteredSyncedTemplates.length})
               </h2>
-              <p className="text-muted-foreground mb-6">
-                {syncedTemplates.length === 0
-                  ? 'Click "Sync from Meta" to fetch templates'
-                  : 'Try adjusting your search query'}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {filteredSyncedTemplates.map((template) => (
-                <div
-                  key={template.id}
-                  className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-foreground truncate">
-                          {template.name}
-                        </h3>
-                        {getStatusBadge(template.status)}
-                        {getCategoryBadge(template.category)}
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>Language: {template.language}</span>
-                        {template.last_synced_at && (
-                          <span>
-                            Last synced: {new Date(template.last_synced_at).toLocaleDateString()}
-                          </span>
+              <div className="grid gap-4">
+                {filteredSyncedTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="bg-card rounded-xl border border-border p-5 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-semibold text-foreground truncate">
+                            {template.name}
+                          </h3>
+                          {getStatusBadge(template.status)}
+                          {getCategoryBadge(template.category)}
+                        </div>
+                        
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Language: {template.language}</span>
+                          {template.last_synced_at && (
+                            <span>
+                              Last synced: {new Date(template.last_synced_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+
+                        {template.components && (
+                          <div className="mt-3 p-3 bg-muted rounded-lg text-sm">
+                            {Array.isArray(template.components) 
+                              ? (template.components as any[]).find((c: any) => c.type === 'BODY')?.text || 'No body text'
+                              : 'No body text'}
+                          </div>
                         )}
                       </div>
 
-                      {template.components && (
-                        <div className="mt-3 p-3 bg-muted rounded-lg text-sm">
-                          {Array.isArray(template.components) 
-                            ? (template.components as any[]).find((c: any) => c.type === 'BODY')?.text || 'No body text'
-                            : 'No body text'}
-                        </div>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={template.status !== 'APPROVED'}
+                      >
+                        <Send className="h-4 w-4" />
+                        Send
+                      </Button>
                     </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={template.status !== 'APPROVED'}
-                    >
-                      <Send className="h-4 w-4" />
-                      Send
-                    </Button>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
 
       {/* Template Form Dialog */}
       <TemplateForm

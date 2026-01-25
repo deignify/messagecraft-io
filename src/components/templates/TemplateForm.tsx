@@ -36,7 +36,7 @@ interface TemplateFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template?: MessageTemplate | null;
-  onSubmit: (data: CreateTemplateInput, submitForReview?: boolean) => Promise<boolean | MessageTemplate | null>;
+  onSubmit: (data: CreateTemplateInput) => Promise<boolean | MessageTemplate | null>;
   saving: boolean;
 }
 
@@ -130,13 +130,11 @@ export function TemplateForm({
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e: React.FormEvent, submitForReview: boolean = false) => {
-    e.preventDefault();
-    
+  const handleFormSubmit = async () => {
     const result = await onSubmit({
       ...formData,
       buttons,
-    }, submitForReview);
+    });
 
     if (result) {
       onOpenChange(false);
@@ -154,7 +152,7 @@ export function TemplateForm({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-6">
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -442,24 +440,15 @@ export function TemplateForm({
             </Button>
             <Button 
               type="button" 
-              variant="secondary"
-              disabled={saving || !isEditable}
-              onClick={(e) => handleSubmit(e as any, false)}
-            >
-              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save as Draft
-            </Button>
-            <Button 
-              type="button" 
               variant="hero"
-              disabled={saving || !isEditable}
-              onClick={(e) => handleSubmit(e as any, true)}
+              disabled={saving || !isEditable || !formData.template_name || !formData.body_text}
+              onClick={handleFormSubmit}
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Submit for Review
+              {template ? 'Update Template' : 'Submit for Review'}
             </Button>
           </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

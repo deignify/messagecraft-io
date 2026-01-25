@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 import {
   MessageCircle,
   Search,
@@ -22,6 +23,8 @@ import {
   MapPin,
   Video,
   Mic,
+  Paperclip,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message } from '@/lib/supabase-types';
@@ -37,7 +40,11 @@ export default function LiveChat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch conversations
   useEffect(() => {
@@ -134,28 +141,126 @@ export default function LiveChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (max 16MB for WhatsApp)
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 16MB.');
+      return;
+    }
+
+    // Validate file type
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+      'application/pdf',
+      'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'video/mp4', 'video/3gpp',
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Unsupported file type. Please use images, PDFs, or documents.');
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Generate preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  // Clear selected file
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Upload file to Supabase Storage and return public URL
+  const uploadFileToStorage = async (file: File): Promise<string> => {
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const fileName = `chat-media/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('room-photos')
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('room-photos')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  };
+
+  // Determine message type from file
+  const getMessageTypeFromFile = (file: File): 'image' | 'document' | 'video' => {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    return 'document';
+  };
+
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedConversation || !selectedNumber || !user) return;
+    if ((!newMessage.trim() && !selectedFile) || !selectedConversation || !selectedNumber || !user) return;
 
     setSending(true);
+    setUploadingMedia(!!selectedFile);
+
     try {
+      let mediaUrl: string | undefined;
+      let messageType: 'text' | 'image' | 'document' | 'video' = 'text';
+      let mediaFilename: string | undefined;
+
+      // Upload file if selected
+      if (selectedFile) {
+        mediaUrl = await uploadFileToStorage(selectedFile);
+        messageType = getMessageTypeFromFile(selectedFile);
+        mediaFilename = selectedFile.name;
+      }
+
       // Call edge function to send message
-      const { data, error } = await supabase.functions.invoke('send-message', {
+      const { error } = await supabase.functions.invoke('send-message', {
         body: {
-          conversationId: selectedConversation.id,
-          whatsappNumberId: selectedNumber.id,
-          content: newMessage,
+          whatsapp_number_id: selectedNumber.id,
           to: selectedConversation.contact_phone,
+          message_type: messageType,
+          content: newMessage.trim() || undefined,
+          media_url: mediaUrl,
+          media_caption: messageType !== 'text' && newMessage.trim() ? newMessage.trim() : undefined,
+          media_filename: mediaFilename,
         },
       });
 
-      if (!error) {
+      if (error) {
+        toast.error('Failed to send message');
+        console.error('Error sending message:', error);
+      } else {
         setNewMessage('');
+        clearSelectedFile();
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      toast.error('Failed to send message');
     } finally {
       setSending(false);
+      setUploadingMedia(false);
     }
   };
 
@@ -399,7 +504,35 @@ export default function LiveChat() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-border bg-card">
+            <div className="p-4 border-t border-border bg-card space-y-3">
+              {/* File Preview */}
+              {selectedFile && (
+                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                  {filePreview ? (
+                    <img src={filePreview} alt="Preview" className="h-16 w-16 object-cover rounded" />
+                  ) : (
+                    <div className="h-16 w-16 flex items-center justify-center bg-primary/10 rounded">
+                      <FileText className="h-8 w-8 text-primary" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearSelectedFile}
+                    disabled={sending}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -407,8 +540,29 @@ export default function LiveChat() {
                 }}
                 className="flex items-center gap-3"
               >
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,video/mp4,video/3gpp"
+                  className="hidden"
+                />
+                
+                {/* Attachment button */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sending}
+                  title="Attach file"
+                >
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+
                 <Input
-                  placeholder="Type a message..."
+                  placeholder={selectedFile ? "Add a caption..." : "Type a message..."}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   className="flex-1"
@@ -418,10 +572,14 @@ export default function LiveChat() {
                   type="submit"
                   variant="hero"
                   size="icon-lg"
-                  disabled={!newMessage.trim() || sending}
+                  disabled={(!newMessage.trim() && !selectedFile) || sending}
                 >
                   {sending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    uploadingMedia ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    )
                   ) : (
                     <Send className="h-5 w-5" />
                   )}

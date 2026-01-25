@@ -15,6 +15,7 @@ interface SendMessageRequest {
   template_params?: Record<string, string[]>;
   media_url?: string;
   media_caption?: string;
+  media_filename?: string;
   interactive?: {
     type: 'button' | 'list';
     header?: { type: string; text?: string };
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
     }
 
     const body: SendMessageRequest = await req.json()
-    const { whatsapp_number_id, to, message_type, content, template_name, template_language, template_params, media_url, media_caption, interactive } = body
+    const { whatsapp_number_id, to, message_type, content, template_name, template_language, template_params, media_url, media_caption, media_filename, interactive } = body
 
     // Validate required fields
     if (!whatsapp_number_id || !to) {
@@ -122,6 +123,7 @@ Deno.serve(async (req) => {
         messagePayload.document = {
           link: media_url,
           caption: media_caption,
+          filename: media_filename || 'document',
         }
         break
 

@@ -27,7 +27,9 @@ import {
   X,
   ArrowLeft,
   AlertTriangle,
+  Plus,
 } from 'lucide-react';
+import { NewMessageDialog } from '@/components/chat/NewMessageDialog';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Template } from '@/lib/supabase-types';
 import { format, isToday, isYesterday, differenceInHours } from 'date-fns';
@@ -59,6 +61,9 @@ export default function LiveChat() {
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  
+  // New message dialog state
+  const [showNewMessageDialog, setShowNewMessageDialog] = useState(false);
   const [isOutsideWindow, setIsOutsideWindow] = useState(false);
 
   // Fetch conversations
@@ -429,16 +434,26 @@ export default function LiveChat() {
         "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
         selectedConversation ? "hidden md:flex" : "flex"
       )}>
-        {/* Search */}
-        <div className="p-3 md:p-4 border-b border-border">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+        {/* Search and New Message */}
+        <div className="p-3 md:p-4 border-b border-border space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Button
+              onClick={() => setShowNewMessageDialog(true)}
+              size="icon"
+              className="h-10 w-10 flex-shrink-0"
+              title="New Message"
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
@@ -827,6 +842,20 @@ export default function LiveChat() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* New Message Dialog */}
+      {user && (
+        <NewMessageDialog
+          open={showNewMessageDialog}
+          onOpenChange={setShowNewMessageDialog}
+          whatsappNumberId={selectedNumber.id}
+          userId={user.id}
+          templates={templates}
+          onMessageSent={() => {
+            // Refresh conversations after sending
+          }}
+        />
+      )}
     </div>
   );
 }

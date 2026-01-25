@@ -100,8 +100,9 @@ Deno.serve(async (req) => {
   return new Response('Method not allowed', { status: 405 })
 })
 
+// deno-lint-ignore no-explicit-any
 async function processIncomingMessage(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   waNumber: { id: string; user_id: string; access_token: string },
   message: WebhookMessage,
   contact?: { profile?: { name: string }; wa_id: string }
@@ -187,8 +188,9 @@ function extractMessageContent(message: WebhookMessage): string {
   }
 }
 
+// deno-lint-ignore no-explicit-any
 async function processStatusUpdate(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   waNumber: { id: string; user_id: string },
   status: WebhookStatus
 ) {

@@ -43,8 +43,7 @@ const navItems = [
   { icon: MessageCircle, label: 'Live Chat', path: '/dashboard/chat' },
   { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
   { icon: FileText, label: 'Templates', path: '/dashboard/templates' },
-  { icon: Zap, label: 'Automation', path: '/dashboard/automation' },
-  { icon: Building2, label: 'Hotel Bot', path: '/dashboard/hotel' },
+  { icon: Building2, label: 'Automation', path: '/dashboard/automation' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 

@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
           
           const { data: waNumber, error: waError } = await supabase
             .from('whatsapp_numbers')
-            .select('id, user_id, access_token')
+            .select('id, user_id, access_token, phone_number_id')
             .eq('phone_number_id', phoneNumberId)
             .maybeSingle()
 
@@ -93,7 +93,13 @@ Deno.serve(async (req) => {
 
           for (const message of value.messages || []) {
             console.log('Processing inbound message from:', message.from, 'type:', message.type)
-            await processIncomingMessage(supabase, waNumber as { id: string; user_id: string; access_token: string }, message, value.contacts?.[0])
+            await processIncomingMessage(
+              supabase, 
+              waNumber as { id: string; user_id: string; access_token: string; phone_number_id: string }, 
+              message, 
+              value.contacts?.[0],
+              SUPABASE_URL
+            )
           }
 
           for (const status of value.statuses || []) {
@@ -120,9 +126,10 @@ Deno.serve(async (req) => {
 // deno-lint-ignore no-explicit-any
 async function processIncomingMessage(
   supabase: any,
-  waNumber: { id: string; user_id: string; access_token: string },
+  waNumber: { id: string; user_id: string; access_token: string; phone_number_id: string },
   message: WebhookMessage,
-  contact?: { profile?: { name: string }; wa_id: string }
+  contact?: { profile?: { name: string }; wa_id: string },
+  supabaseUrl?: string
 ) {
   const contactPhone = message.from
   const contactName = contact?.profile?.name || null
@@ -190,6 +197,32 @@ async function processIncomingMessage(
     content: messageContent,
     status: 'delivered',
   })
+
+  // Trigger hotel bot automation if hotel exists for this number
+  if (supabaseUrl && message.type === 'text') {
+    try {
+      console.log('Triggering hotel bot for message:', messageContent)
+      const botResponse = await fetch(`${supabaseUrl}/functions/v1/hotel-bot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        },
+        body: JSON.stringify({
+          whatsapp_number_id: waNumber.id,
+          phone_number_id: waNumber.phone_number_id,
+          access_token: waNumber.access_token,
+          from_phone: contactPhone,
+          message_text: messageContent,
+          contact_name: contactName,
+        }),
+      })
+      const botResult = await botResponse.json()
+      console.log('Hotel bot response:', botResult)
+    } catch (botError) {
+      console.error('Hotel bot error:', botError)
+    }
+  }
 }
 
 function extractMessageContent(message: WebhookMessage): string {
@@ -200,7 +233,7 @@ function extractMessageContent(message: WebhookMessage): string {
     case 'audio': return '[Audio]'
     case 'document': return `[Document: ${message.document?.filename || 'file'}]`
     case 'location': return `[Location]`
-    case 'interactive': return message.interactive?.button_reply?.title || '[Interactive]'
+    case 'interactive': return message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || '[Interactive]'
     default: return `[${message.type}]`
   }
 }

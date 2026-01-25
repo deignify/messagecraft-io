@@ -127,14 +127,30 @@ export function useHotel() {
   const updateHotel = async (data: Partial<Hotel>) => {
     if (!hotel) return null;
 
+    const updateData = {
+      name: data.name,
+      description: data.description,
+      phone: data.phone,
+      email: data.email,
+      website: data.website,
+      address: data.address,
+      google_maps_link: data.google_maps_link,
+      reception_timing: data.reception_timing,
+      cancellation_policy: data.cancellation_policy,
+      languages: data.languages,
+      is_active: data.is_active,
+      updated_at: new Date().toISOString(),
+    };
+
     const { data: updatedHotel, error } = await supabase
       .from('hotels')
-      .update(data)
+      .update(updateData)
       .eq('id', hotel.id)
       .select()
       .single();
 
     if (error) {
+      console.error('Hotel update error:', error);
       toast.error('Failed to update hotel');
       throw error;
     }
@@ -196,12 +212,44 @@ export function useHotel() {
   };
 
   const deleteRoom = async (roomId: string) => {
+    // Check if room has any bookings
+    const { data: bookings, error: checkError } = await supabase
+      .from('hotel_bookings')
+      .select('id')
+      .eq('room_type_id', roomId)
+      .limit(1);
+
+    if (checkError) {
+      console.error('Error checking bookings:', checkError);
+      toast.error('Failed to check room bookings');
+      throw checkError;
+    }
+
+    if (bookings && bookings.length > 0) {
+      toast.error('Cannot delete room with existing bookings. Please delete or reassign bookings first.');
+      return;
+    }
+
+    // First delete all photos for this room
+    const { error: photoError } = await supabase
+      .from('room_photos')
+      .delete()
+      .eq('room_type_id', roomId);
+
+    if (photoError) {
+      console.error('Error deleting photos:', photoError);
+      toast.error('Failed to delete room photos');
+      throw photoError;
+    }
+
+    // Now delete the room
     const { error } = await supabase
       .from('room_types')
       .delete()
       .eq('id', roomId);
 
     if (error) {
+      console.error('Room delete error:', error);
       toast.error('Failed to delete room');
       throw error;
     }

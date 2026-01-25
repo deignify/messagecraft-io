@@ -168,22 +168,81 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get or create bot session
-    const sessionKey = `hotel_bot_${whatsapp_number_id}_${from_phone}`
-    let session: BotSession = { state: 'welcome', data: {} }
+    // Ensure we have an automation record for the Hotel Bot.
+    // This is required because automation_sessions.automation_id is NOT NULL.
+    const HOTEL_BOT_AUTOMATION_NAME = 'Hotel Bot'
 
-    // Check for existing session in automation_sessions
-    const { data: existingSession } = await supabase
-      .from('automation_sessions')
-      .select('session_data, id')
-      .eq('contact_phone', from_phone)
-      .eq('is_active', true)
-      .order('started_at', { ascending: false })
-      .limit(1)
+    const { data: existingAutomation } = await supabase
+      .from('automations')
+      .select('id')
+      .eq('whatsapp_number_id', whatsapp_number_id)
+      .eq('user_id', hotel.user_id)
+      .eq('name', HOTEL_BOT_AUTOMATION_NAME)
       .maybeSingle()
 
-    if (existingSession?.session_data) {
-      session = existingSession.session_data as BotSession
+    let hotelBotAutomationId: string | null = existingAutomation?.id ?? null
+
+    if (!hotelBotAutomationId) {
+      const { data: createdAutomation, error: createAutomationError } = await supabase
+        .from('automations')
+        .insert({
+          name: HOTEL_BOT_AUTOMATION_NAME,
+          user_id: hotel.user_id,
+          whatsapp_number_id,
+          trigger_type: 'always',
+          is_active: true,
+          priority: 100,
+          trigger_keywords: [],
+        })
+        .select('id')
+        .single()
+
+      if (createAutomationError) {
+        console.error('Failed to create Hotel Bot automation:', createAutomationError)
+      } else {
+        hotelBotAutomationId = createdAutomation.id
+      }
+    }
+
+    // Get or create bot session (persisted) so numbered replies work.
+    let session: BotSession = { state: 'welcome', data: {} }
+    let sessionRowId: string | null = null
+
+    if (hotelBotAutomationId) {
+      // Check for existing session in automation_sessions
+      const { data: existingSession } = await supabase
+        .from('automation_sessions')
+        .select('session_data, id')
+        .eq('automation_id', hotelBotAutomationId)
+        .eq('contact_phone', from_phone)
+        .eq('is_active', true)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingSession?.session_data) {
+        session = existingSession.session_data as BotSession
+        sessionRowId = existingSession.id
+      } else {
+        const { data: createdSession, error: createSessionError } = await supabase
+          .from('automation_sessions')
+          .insert({
+            automation_id: hotelBotAutomationId,
+            contact_phone: from_phone,
+            is_active: true,
+            session_data: session,
+            last_interaction_at: new Date().toISOString(),
+          })
+          .select('id, session_data')
+          .single()
+
+        if (createSessionError) {
+          console.error('Failed to create hotel bot session:', createSessionError)
+        } else {
+          sessionRowId = createdSession.id
+          session = createdSession.session_data as BotSession
+        }
+      }
     }
 
     const msg = message_text.toLowerCase().trim()
@@ -527,11 +586,11 @@ Deno.serve(async (req) => {
 
     // Update session
     session.state = newState
-    if (existingSession?.id) {
+    if (sessionRowId) {
       await supabase
         .from('automation_sessions')
         .update({ session_data: session, last_interaction_at: new Date().toISOString() })
-        .eq('id', existingSession.id)
+        .eq('id', sessionRowId)
     }
 
     // Send response via WhatsApp

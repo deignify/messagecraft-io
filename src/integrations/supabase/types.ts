@@ -472,6 +472,74 @@ export type Database = {
           },
         ]
       }
+      message_templates: {
+        Row: {
+          body_text: string
+          buttons: Json | null
+          category: Database["public"]["Enums"]["custom_template_category"]
+          created_at: string | null
+          footer_text: string | null
+          header_media_url: string | null
+          header_text: string | null
+          header_type: Database["public"]["Enums"]["template_header_type"]
+          id: string
+          is_deleted: boolean | null
+          language: string
+          status: Database["public"]["Enums"]["custom_template_status"]
+          template_name: string
+          updated_at: string | null
+          user_id: string
+          variables: Json | null
+          whatsapp_number_id: string
+        }
+        Insert: {
+          body_text: string
+          buttons?: Json | null
+          category?: Database["public"]["Enums"]["custom_template_category"]
+          created_at?: string | null
+          footer_text?: string | null
+          header_media_url?: string | null
+          header_text?: string | null
+          header_type?: Database["public"]["Enums"]["template_header_type"]
+          id?: string
+          is_deleted?: boolean | null
+          language?: string
+          status?: Database["public"]["Enums"]["custom_template_status"]
+          template_name: string
+          updated_at?: string | null
+          user_id: string
+          variables?: Json | null
+          whatsapp_number_id: string
+        }
+        Update: {
+          body_text?: string
+          buttons?: Json | null
+          category?: Database["public"]["Enums"]["custom_template_category"]
+          created_at?: string | null
+          footer_text?: string | null
+          header_media_url?: string | null
+          header_text?: string | null
+          header_type?: Database["public"]["Enums"]["template_header_type"]
+          id?: string
+          is_deleted?: boolean | null
+          language?: string
+          status?: Database["public"]["Enums"]["custom_template_status"]
+          template_name?: string
+          updated_at?: string | null
+          user_id?: string
+          variables?: Json | null
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_templates_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string | null
@@ -850,6 +918,8 @@ export type Database = {
         | "checked_in"
         | "checked_out"
       conversation_status: "open" | "closed" | "pending"
+      custom_template_category: "marketing" | "utility" | "authentication"
+      custom_template_status: "draft" | "pending" | "approved" | "rejected"
       message_direction: "inbound" | "outbound"
       message_status: "pending" | "sent" | "delivered" | "read" | "failed"
       message_type:
@@ -864,6 +934,7 @@ export type Database = {
         | "sticker"
       step_type: "message" | "menu" | "condition" | "delay" | "assign"
       template_category: "AUTHENTICATION" | "MARKETING" | "UTILITY"
+      template_header_type: "none" | "text" | "image" | "video" | "document"
       template_status:
         | "APPROVED"
         | "PENDING"
@@ -1008,6 +1079,8 @@ export const Constants = {
         "checked_out",
       ],
       conversation_status: ["open", "closed", "pending"],
+      custom_template_category: ["marketing", "utility", "authentication"],
+      custom_template_status: ["draft", "pending", "approved", "rejected"],
       message_direction: ["inbound", "outbound"],
       message_status: ["pending", "sent", "delivered", "read", "failed"],
       message_type: [
@@ -1023,6 +1096,7 @@ export const Constants = {
       ],
       step_type: ["message", "menu", "condition", "delay", "assign"],
       template_category: ["AUTHENTICATION", "MARKETING", "UTILITY"],
+      template_header_type: ["none", "text", "image", "video", "document"],
       template_status: [
         "APPROVED",
         "PENDING",

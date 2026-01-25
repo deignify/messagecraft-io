@@ -357,9 +357,23 @@ export default function LiveChat() {
                           <span>{message.content || 'Audio'}</span>
                         </div>
                       ) : message.type === 'document' ? (
-                        <div className="flex items-center gap-2 text-sm text-foreground">
-                          <FileText className="h-4 w-4" />
-                          <span>{message.content || 'Document'}</span>
+                        <div className="space-y-2">
+                          {message.media_url ? (
+                            <a 
+                              href={message.media_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-sm text-foreground hover:text-primary transition-colors p-2 bg-muted/50 rounded-lg"
+                            >
+                              <FileText className="h-5 w-5 flex-shrink-0" />
+                              <span className="truncate">{message.content?.replace('[Document: ', '').replace(']', '') || 'Document'}</span>
+                            </a>
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <FileText className="h-4 w-4" />
+                              <span>{message.content || 'Document'}</span>
+                            </div>
+                          )}
                         </div>
                       ) : message.type === 'location' ? (
                         <div className="flex items-center gap-2 text-sm text-foreground">

@@ -56,7 +56,7 @@ export function useMessageTemplates() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  const createTemplate = async (input: CreateTemplateInput): Promise<MessageTemplate | null> => {
+  const createTemplate = async (input: CreateTemplateInput, submitForReview: boolean = false): Promise<MessageTemplate | null> => {
     if (!user || !selectedNumber) {
       toast({
         title: 'Error',
@@ -68,13 +68,14 @@ export function useMessageTemplates() {
 
     setSaving(true);
     try {
+      const templateStatus = submitForReview ? 'pending' : 'draft';
       const insertData = {
         user_id: user.id,
         whatsapp_number_id: selectedNumber.id,
         template_name: input.template_name,
         category: input.category,
         language: input.language,
-        status: 'draft' as const,
+        status: templateStatus,
         header_type: input.header_type,
         header_text: input.header_text || null,
         header_media_url: input.header_media_url || null,
@@ -102,7 +103,9 @@ export function useMessageTemplates() {
       
       toast({
         title: 'Success',
-        description: 'Template created successfully',
+        description: submitForReview 
+          ? 'Template submitted for review' 
+          : 'Template saved as draft',
       });
 
       return newTemplate;
@@ -198,6 +201,39 @@ export function useMessageTemplates() {
     }
   };
 
+  const submitForReview = async (id: string): Promise<boolean> => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('message_templates')
+        .update({ status: 'pending' })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setTemplates((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, status: 'pending' as const } : t))
+      );
+
+      toast({
+        title: 'Submitted',
+        description: 'Template submitted for review',
+      });
+
+      return true;
+    } catch (error: any) {
+      console.error('Error submitting template:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to submit template',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     templates,
     loading,
@@ -206,5 +242,6 @@ export function useMessageTemplates() {
     createTemplate,
     updateTemplate,
     deleteTemplate,
+    submitForReview,
   };
 }

@@ -36,7 +36,7 @@ interface TemplateFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   template?: MessageTemplate | null;
-  onSubmit: (data: CreateTemplateInput) => Promise<boolean | MessageTemplate | null>;
+  onSubmit: (data: CreateTemplateInput, submitForReview?: boolean) => Promise<boolean | MessageTemplate | null>;
   saving: boolean;
 }
 
@@ -130,13 +130,13 @@ export function TemplateForm({
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, submitForReview: boolean = false) => {
     e.preventDefault();
     
     const result = await onSubmit({
       ...formData,
       buttons,
-    });
+    }, submitForReview);
 
     if (result) {
       onOpenChange(false);
@@ -432,7 +432,7 @@ export function TemplateForm({
             ))}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
               type="button"
               variant="outline"
@@ -440,9 +440,23 @@ export function TemplateForm({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !isEditable}>
+            <Button 
+              type="button" 
+              variant="secondary"
+              disabled={saving || !isEditable}
+              onClick={(e) => handleSubmit(e as any, false)}
+            >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {template ? 'Update Template' : 'Create Template'}
+              Save as Draft
+            </Button>
+            <Button 
+              type="button" 
+              variant="hero"
+              disabled={saving || !isEditable}
+              onClick={(e) => handleSubmit(e as any, true)}
+            >
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Submit for Review
             </Button>
           </DialogFooter>
         </form>

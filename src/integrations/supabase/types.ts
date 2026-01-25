@@ -276,6 +276,199 @@ export type Database = {
           },
         ]
       }
+      hotel_bookings: {
+        Row: {
+          adults: number | null
+          booking_id: string
+          check_in_date: string
+          check_out_date: string
+          children: number | null
+          created_at: string | null
+          feedback_comment: string | null
+          feedback_rating: number | null
+          feedback_requested: boolean | null
+          guest_name: string
+          guest_phone: string
+          guest_whatsapp_phone: string | null
+          hotel_id: string
+          id: string
+          notes: string | null
+          reminder_sent_checkin: boolean | null
+          reminder_sent_checkout: boolean | null
+          room_type_id: string
+          status: Database["public"]["Enums"]["booking_status"] | null
+          total_price: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          adults?: number | null
+          booking_id: string
+          check_in_date: string
+          check_out_date: string
+          children?: number | null
+          created_at?: string | null
+          feedback_comment?: string | null
+          feedback_rating?: number | null
+          feedback_requested?: boolean | null
+          guest_name: string
+          guest_phone: string
+          guest_whatsapp_phone?: string | null
+          hotel_id: string
+          id?: string
+          notes?: string | null
+          reminder_sent_checkin?: boolean | null
+          reminder_sent_checkout?: boolean | null
+          room_type_id: string
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_price?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          adults?: number | null
+          booking_id?: string
+          check_in_date?: string
+          check_out_date?: string
+          children?: number | null
+          created_at?: string | null
+          feedback_comment?: string | null
+          feedback_rating?: number | null
+          feedback_requested?: boolean | null
+          guest_name?: string
+          guest_phone?: string
+          guest_whatsapp_phone?: string | null
+          hotel_id?: string
+          id?: string
+          notes?: string | null
+          reminder_sent_checkin?: boolean | null
+          reminder_sent_checkout?: boolean | null
+          room_type_id?: string
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_price?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotel_bookings_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hotel_bookings_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hotel_offers: {
+        Row: {
+          created_at: string | null
+          end_date: string | null
+          hotel_id: string
+          id: string
+          is_active: boolean | null
+          message: string
+          start_date: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_date?: string | null
+          hotel_id: string
+          id?: string
+          is_active?: boolean | null
+          message: string
+          start_date?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string | null
+          hotel_id?: string
+          id?: string
+          is_active?: boolean | null
+          message?: string
+          start_date?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotel_offers_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hotels: {
+        Row: {
+          address: string | null
+          cancellation_policy: string | null
+          created_at: string | null
+          description: string | null
+          email: string | null
+          google_maps_link: string | null
+          id: string
+          is_active: boolean | null
+          languages: string[] | null
+          name: string
+          phone: string | null
+          reception_timing: string | null
+          updated_at: string | null
+          user_id: string
+          website: string | null
+          whatsapp_number_id: string
+        }
+        Insert: {
+          address?: string | null
+          cancellation_policy?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          google_maps_link?: string | null
+          id?: string
+          is_active?: boolean | null
+          languages?: string[] | null
+          name: string
+          phone?: string | null
+          reception_timing?: string | null
+          updated_at?: string | null
+          user_id: string
+          website?: string | null
+          whatsapp_number_id: string
+        }
+        Update: {
+          address?: string | null
+          cancellation_policy?: string | null
+          created_at?: string | null
+          description?: string | null
+          email?: string | null
+          google_maps_link?: string | null
+          id?: string
+          is_active?: boolean | null
+          languages?: string[] | null
+          name?: string
+          phone?: string | null
+          reception_timing?: string | null
+          updated_at?: string | null
+          user_id?: string
+          website?: string | null
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotels_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string | null
@@ -383,6 +576,94 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      room_photos: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          id: string
+          photo_url: string
+          room_type_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          photo_url: string
+          room_type_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          photo_url?: string
+          room_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_photos_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      room_types: {
+        Row: {
+          amenities: string[] | null
+          base_price: number | null
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          hotel_id: string
+          id: string
+          is_ac: boolean | null
+          is_available: boolean | null
+          max_adults: number | null
+          max_children: number | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          amenities?: string[] | null
+          base_price?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          hotel_id: string
+          id?: string
+          is_ac?: boolean | null
+          is_available?: boolean | null
+          max_adults?: number | null
+          max_children?: number | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          amenities?: string[] | null
+          base_price?: number | null
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          hotel_id?: string
+          id?: string
+          is_ac?: boolean | null
+          is_available?: boolean | null
+          max_adults?: number | null
+          max_children?: number | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_types_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       templates: {
         Row: {
@@ -555,10 +836,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_booking_id: { Args: { hotel_name: string }; Returns: string }
     }
     Enums: {
       automation_trigger: "first_message" | "keyword" | "always"
+      booking_status:
+        | "pending"
+        | "confirmed"
+        | "cancelled"
+        | "checked_in"
+        | "checked_out"
       conversation_status: "open" | "closed" | "pending"
       message_direction: "inbound" | "outbound"
       message_status: "pending" | "sent" | "delivered" | "read" | "failed"
@@ -710,6 +997,13 @@ export const Constants = {
   public: {
     Enums: {
       automation_trigger: ["first_message", "keyword", "always"],
+      booking_status: [
+        "pending",
+        "confirmed",
+        "cancelled",
+        "checked_in",
+        "checked_out",
+      ],
       conversation_status: ["open", "closed", "pending"],
       message_direction: ["inbound", "outbound"],
       message_status: ["pending", "sent", "delivered", "read", "failed"],

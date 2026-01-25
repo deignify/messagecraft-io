@@ -63,7 +63,7 @@ export default function Refund() {
               To request a refund:
             </p>
             <ol className="list-decimal pl-6 space-y-2 text-muted-foreground">
-              <li>Contact our support team at billing@chatsetu.com</li>
+              <li>Contact our support team at <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a></li>
               <li>Include your account email and the reason for your request</li>
               <li>Provide any relevant documentation or evidence</li>
               <li>Allow up to 5 business days for review</li>
@@ -102,8 +102,8 @@ export default function Refund() {
             <h2 className="text-2xl font-semibold mb-4">10. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have questions about our refund policy, please contact us at:<br />
-              Email: billing@chatsetu.com<br />
-              Support: support@chatsetu.com
+              Email: <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a><br />
+              Phone: <a href="tel:+919227154271" className="text-primary hover:underline">+91 92271 54271</a>
             </p>
           </section>
         </div>

@@ -154,8 +154,8 @@ export default function DataProcessing() {
             <h2 className="text-2xl font-semibold mb-4">13. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               For questions about this Data Processing Agreement:<br />
-              Data Protection Officer: dpo@chatsetu.com<br />
-              Privacy Team: privacy@chatsetu.com
+              Email: <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a><br />
+              Phone: <a href="tel:+919227154271" className="text-primary hover:underline">+91 92271 54271</a>
             </p>
           </section>
         </div>

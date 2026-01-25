@@ -125,8 +125,8 @@ export default function Privacy() {
             <h2 className="text-2xl font-semibold mb-4">11. Contact Us</h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have questions about this Privacy Policy, please contact us at:<br />
-              Email: privacy@chatsetu.com<br />
-              Address: [Your Business Address]
+              Email: <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">contact@chatsetu.online</a><br />
+              Phone: <a href="tel:+919227154271" className="text-primary hover:underline">+91 92271 54271</a>
             </p>
           </section>
         </div>

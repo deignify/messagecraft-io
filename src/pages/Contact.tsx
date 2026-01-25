@@ -171,9 +171,9 @@ export default function Contact() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-1">Email Us</h3>
-                      <p className="text-sm text-muted-foreground mb-2">For general inquiries</p>
-                      <a href="mailto:hello@chatsetu.com" className="text-primary hover:underline">
-                        hello@chatsetu.com
+                      <p className="text-sm text-muted-foreground mb-2">For all inquiries</p>
+                      <a href="mailto:contact@chatsetu.online" className="text-primary hover:underline">
+                        contact@chatsetu.online
                       </a>
                     </div>
                   </div>
@@ -188,7 +188,7 @@ export default function Contact() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-1">Live Chat</h3>
-                      <p className="text-sm text-muted-foreground mb-2">Mon-Fri, 9am-6pm EST</p>
+                      <p className="text-sm text-muted-foreground mb-2">Mon-Fri, 10am-6pm IST</p>
                       <p className="text-primary">Available in-app</p>
                     </div>
                   </div>
@@ -203,9 +203,9 @@ export default function Contact() {
                     </div>
                     <div>
                       <h3 className="font-semibold mb-1">Phone Support</h3>
-                      <p className="text-sm text-muted-foreground mb-2">For enterprise customers</p>
-                      <a href="tel:+1-888-CHATSETU" className="text-primary hover:underline">
-                        +1-888-CHATSETU
+                      <p className="text-sm text-muted-foreground mb-2">Mon-Fri, 10am-6pm IST</p>
+                      <a href="tel:+919227154271" className="text-primary hover:underline">
+                        +91 92271 54271
                       </a>
                     </div>
                   </div>
@@ -221,9 +221,7 @@ export default function Contact() {
                     <div>
                       <h3 className="font-semibold mb-1">Office</h3>
                       <p className="text-sm text-muted-foreground">
-                        123 Tech Street<br />
-                        San Francisco, CA 94105<br />
-                        United States
+                        India
                       </p>
                     </div>
                   </div>

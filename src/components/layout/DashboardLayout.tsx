@@ -37,6 +37,16 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Mobile bottom nav items
+const mobileNavItems = [
+  { icon: LayoutDashboard, label: 'Home', path: '/dashboard' },
+  { icon: MessageCircle, label: 'Chat', path: '/dashboard/chat' },
+  { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
+  { icon: Building2, label: 'Hotel', path: '/dashboard/automation' },
+  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
+];
+
+// Full sidebar nav items
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Phone, label: 'WhatsApp Numbers', path: '/dashboard/numbers' },
@@ -256,11 +266,35 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto">
+        {/* Page Content - extra padding bottom for mobile nav */}
+        <main className="flex-1 overflow-auto pb-16 lg:pb-0">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom">
+        <div className="flex items-center justify-around h-16">
+          {mobileNavItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors",
+                  isActive
+                    ? "text-primary"
+                    : "text-muted-foreground"
+                )}
+              >
+                <item.icon className={cn("h-5 w-5", isActive && "text-primary")} />
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }

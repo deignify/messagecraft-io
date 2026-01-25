@@ -25,6 +25,7 @@ import {
   Mic,
   Paperclip,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message } from '@/lib/supabase-types';
@@ -313,12 +314,20 @@ export default function LiveChat() {
     );
   }
 
+  // Mobile back button handler
+  const handleBackToList = () => {
+    setSelectedConversation(null);
+  };
+
   return (
     <div className="h-[calc(100vh-64px)] flex">
-      {/* Conversations List */}
-      <div className="w-80 lg:w-96 border-r border-border flex flex-col bg-card">
+      {/* Conversations List - Hidden on mobile when chat is selected */}
+      <div className={cn(
+        "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
+        selectedConversation ? "hidden md:flex" : "flex"
+      )}>
         {/* Search */}
-        <div className="p-4 border-b border-border">
+        <div className="p-3 md:p-4 border-b border-border">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -348,30 +357,30 @@ export default function LiveChat() {
                   key={conversation.id}
                   onClick={() => setSelectedConversation(conversation)}
                   className={cn(
-                    "flex items-center gap-3 p-4 cursor-pointer transition-colors hover:bg-muted/50",
+                    "flex items-center gap-3 p-3 md:p-4 cursor-pointer transition-colors hover:bg-muted/50 active:bg-muted",
                     selectedConversation?.id === conversation.id && "bg-muted"
                   )}
                 >
-                  <Avatar className="h-12 w-12">
+                  <Avatar className="h-11 w-11 md:h-12 md:w-12 flex-shrink-0">
                     <AvatarFallback className="bg-primary/10 text-primary">
                       {conversation.contact_name?.[0] || conversation.contact_phone[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium text-foreground truncate">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="font-medium text-foreground truncate text-sm md:text-base">
                         {conversation.contact_name || conversation.contact_phone}
                       </h4>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] md:text-xs text-muted-foreground flex-shrink-0">
                         {formatConversationTime(conversation.last_message_at)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between mt-0.5">
-                      <p className="text-sm text-muted-foreground truncate">
+                    <div className="flex items-center justify-between mt-0.5 gap-2">
+                      <p className="text-xs md:text-sm text-muted-foreground truncate">
                         {conversation.last_message_text || 'No messages'}
                       </p>
                       {conversation.unread_count > 0 && (
-                        <span className="flex items-center justify-center h-5 min-w-5 px-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-full">
+                        <span className="flex items-center justify-center h-5 min-w-5 px-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-full flex-shrink-0">
                           {conversation.unread_count}
                         </span>
                       )}
@@ -384,20 +393,32 @@ export default function LiveChat() {
         </ScrollArea>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      {/* Chat Area - Full width on mobile when selected */}
+      <div className={cn(
+        "flex-1 flex flex-col",
+        selectedConversation ? "flex" : "hidden md:flex"
+      )}>
         {selectedConversation ? (
           <>
-            {/* Chat Header */}
-            <div className="h-16 px-4 flex items-center justify-between border-b border-border bg-card">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-primary/10 text-primary">
+            {/* Chat Header with back button on mobile */}
+            <div className="h-14 md:h-16 px-2 md:px-4 flex items-center justify-between border-b border-border bg-card">
+              <div className="flex items-center gap-2 md:gap-3">
+                {/* Back button - only on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden flex-shrink-0"
+                  onClick={handleBackToList}
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <Avatar className="h-9 w-9 md:h-10 md:w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
                     {selectedConversation.contact_name?.[0] || selectedConversation.contact_phone[0]}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <h3 className="font-medium text-foreground">
+                <div className="min-w-0">
+                  <h3 className="font-medium text-foreground text-sm md:text-base truncate">
                     {selectedConversation.contact_name || selectedConversation.contact_phone}
                   </h3>
                   <p className="text-xs text-muted-foreground">
@@ -411,8 +432,8 @@ export default function LiveChat() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-3">
+            <ScrollArea className="flex-1 p-2 md:p-4">
+              <div className="space-y-2 md:space-y-3">
                 {messages.map((message) => (
                   <div
                     key={message.id}
@@ -423,7 +444,7 @@ export default function LiveChat() {
                   >
                     <div
                       className={cn(
-                        "max-w-[70%] px-4 py-2 rounded-2xl",
+                        "max-w-[85%] md:max-w-[70%] px-3 md:px-4 py-2 rounded-2xl",
                         message.direction === 'outbound'
                           ? "bg-chat-outbound rounded-br-md"
                           : "bg-chat-inbound rounded-bl-md"
@@ -504,20 +525,20 @@ export default function LiveChat() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="p-4 border-t border-border bg-card space-y-3">
+            <div className="p-2 md:p-4 border-t border-border bg-card space-y-2 md:space-y-3">
               {/* File Preview */}
               {selectedFile && (
-                <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-muted rounded-lg">
                   {filePreview ? (
-                    <img src={filePreview} alt="Preview" className="h-16 w-16 object-cover rounded" />
+                    <img src={filePreview} alt="Preview" className="h-12 w-12 md:h-16 md:w-16 object-cover rounded" />
                   ) : (
-                    <div className="h-16 w-16 flex items-center justify-center bg-primary/10 rounded">
-                      <FileText className="h-8 w-8 text-primary" />
+                    <div className="h-12 w-12 md:h-16 md:w-16 flex items-center justify-center bg-primary/10 rounded flex-shrink-0">
+                      <FileText className="h-6 w-6 md:h-8 md:w-8 text-primary" />
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{selectedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs md:text-sm font-medium text-foreground truncate">{selectedFile.name}</p>
+                    <p className="text-[10px] md:text-xs text-muted-foreground">
                       {(selectedFile.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
@@ -525,6 +546,7 @@ export default function LiveChat() {
                     type="button"
                     variant="ghost"
                     size="icon"
+                    className="h-8 w-8 flex-shrink-0"
                     onClick={clearSelectedFile}
                     disabled={sending}
                   >
@@ -538,7 +560,7 @@ export default function LiveChat() {
                   e.preventDefault();
                   handleSendMessage();
                 }}
-                className="flex items-center gap-3"
+                className="flex items-center gap-2 md:gap-3"
               >
                 {/* Hidden file input */}
                 <input
@@ -554,6 +576,7 @@ export default function LiveChat() {
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="h-10 w-10 flex-shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending}
                   title="Attach file"
@@ -565,21 +588,18 @@ export default function LiveChat() {
                   placeholder={selectedFile ? "Add a caption..." : "Type a message..."}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-1"
+                  className="flex-1 h-10 md:h-11 text-sm md:text-base"
                   disabled={sending}
                 />
                 <Button
                   type="submit"
                   variant="hero"
-                  size="icon-lg"
+                  size="icon"
+                  className="h-10 w-10 md:h-11 md:w-11 flex-shrink-0"
                   disabled={(!newMessage.trim() && !selectedFile) || sending}
                 >
                   {sending ? (
-                    uploadingMedia ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    )
+                    <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Send className="h-5 w-5" />
                   )}

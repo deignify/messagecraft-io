@@ -67,7 +67,7 @@ export default function Contact() {
           <div className="text-center mb-12">
             <h1 className="text-4xl font-display font-bold mb-4">Contact Us</h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Have questions about ChatFlow? We're here to help. Reach out and we'll respond within 24 hours.
+              Have questions about Chat Setu? We're here to help. Reach out and we'll respond within 24 hours.
             </p>
           </div>
 
@@ -172,8 +172,8 @@ export default function Contact() {
                     <div>
                       <h3 className="font-semibold mb-1">Email Us</h3>
                       <p className="text-sm text-muted-foreground mb-2">For general inquiries</p>
-                      <a href="mailto:hello@chatflow.com" className="text-primary hover:underline">
-                        hello@chatflow.com
+                      <a href="mailto:hello@chatsetu.com" className="text-primary hover:underline">
+                        hello@chatsetu.com
                       </a>
                     </div>
                   </div>
@@ -204,8 +204,8 @@ export default function Contact() {
                     <div>
                       <h3 className="font-semibold mb-1">Phone Support</h3>
                       <p className="text-sm text-muted-foreground mb-2">For enterprise customers</p>
-                      <a href="tel:+1-888-CHATFLOW" className="text-primary hover:underline">
-                        +1-888-CHATFLOW
+                      <a href="tel:+1-888-CHATSETU" className="text-primary hover:underline">
+                        +1-888-CHATSETU
                       </a>
                     </div>
                   </div>

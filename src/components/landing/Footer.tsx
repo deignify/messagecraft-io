@@ -33,7 +33,7 @@ export function Footer() {
                 <MessageSquare className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="text-xl font-display font-bold text-sidebar-foreground">
-                ChatFlow
+                Chat Setu
               </span>
             </Link>
             <p className="text-sidebar-foreground/70 text-sm max-w-xs mb-6">
@@ -41,7 +41,7 @@ export function Footer() {
               Automate, engage, and grow.
             </p>
             <p className="text-sidebar-foreground/50 text-xs">
-              © {new Date().getFullYear()} ChatFlow. All rights reserved.
+              © {new Date().getFullYear()} Chat Setu. All rights reserved.
             </p>
           </div>
 

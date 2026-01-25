@@ -87,7 +87,7 @@ export function DashboardLayout() {
             </div>
             {sidebarOpen && (
               <span className="text-lg font-display font-bold text-sidebar-foreground">
-                ChatFlow
+                Chat Setu
               </span>
             )}
           </Link>
@@ -170,7 +170,7 @@ export function DashboardLayout() {
                   <MessageSquare className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <span className="text-lg font-display font-bold text-sidebar-foreground">
-                  ChatFlow
+                  Chat Setu
                 </span>
               </Link>
               <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>

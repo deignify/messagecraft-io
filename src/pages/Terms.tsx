@@ -13,14 +13,14 @@ export default function Terms() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">1. Acceptance of Terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              By accessing or using ChatFlow's services, you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using or accessing our services.
+              By accessing or using Chat Setu's services, you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using or accessing our services.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">2. Description of Services</h2>
             <p className="text-muted-foreground leading-relaxed">
-              ChatFlow provides a platform for managing WhatsApp Business communications through the WhatsApp Cloud API. Our services include message sending and receiving, contact management, message templates, automation tools, and analytics.
+              Chat Setu provides a platform for managing WhatsApp Business communications through the WhatsApp Cloud API. Our services include message sending and receiving, contact management, message templates, automation tools, and analytics.
             </p>
           </section>
 
@@ -79,7 +79,7 @@ export default function Terms() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">7. Intellectual Property</h2>
             <p className="text-muted-foreground leading-relaxed">
-              All content, features, and functionality of ChatFlow are owned by us and protected by international copyright, trademark, and other intellectual property laws. You may not copy, modify, distribute, or create derivative works without our express written permission.
+              All content, features, and functionality of Chat Setu are owned by us and protected by international copyright, trademark, and other intellectual property laws. You may not copy, modify, distribute, or create derivative works without our express written permission.
             </p>
           </section>
 
@@ -100,14 +100,14 @@ export default function Terms() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">10. Limitation of Liability</h2>
             <p className="text-muted-foreground leading-relaxed">
-              TO THE MAXIMUM EXTENT PERMITTED BY LAW, CHATFLOW SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS, DATA, OR BUSINESS OPPORTUNITIES, REGARDLESS OF WHETHER WE WERE ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+              TO THE MAXIMUM EXTENT PERMITTED BY LAW, CHAT SETU SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS, DATA, OR BUSINESS OPPORTUNITIES, REGARDLESS OF WHETHER WE WERE ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
             </p>
           </section>
 
           <section>
             <h2 className="text-2xl font-semibold mb-4">11. Indemnification</h2>
             <p className="text-muted-foreground leading-relaxed">
-              You agree to indemnify and hold harmless ChatFlow and its officers, directors, employees, and agents from any claims, damages, losses, or expenses arising from your use of our services or violation of these terms.
+              You agree to indemnify and hold harmless Chat Setu and its officers, directors, employees, and agents from any claims, damages, losses, or expenses arising from your use of our services or violation of these terms.
             </p>
           </section>
 
@@ -136,7 +136,7 @@ export default function Terms() {
             <h2 className="text-2xl font-semibold mb-4">15. Contact Information</h2>
             <p className="text-muted-foreground leading-relaxed">
               For questions about these Terms of Service, please contact us at:<br />
-              Email: legal@chatflow.com<br />
+              Email: legal@chatsetu.com<br />
               Address: [Your Business Address]
             </p>
           </section>

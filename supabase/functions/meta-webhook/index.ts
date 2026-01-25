@@ -199,9 +199,28 @@ async function processIncomingMessage(
   })
 
   // Trigger hotel bot automation if hotel exists for this number
-  if (supabaseUrl && message.type === 'text') {
+  // Handle text messages and media (images/documents for ID upload)
+  if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document')) {
     try {
-      console.log('Triggering hotel bot for message:', messageContent)
+      console.log('Triggering hotel bot for message:', messageContent, 'type:', message.type)
+      
+      // Build media info for image/document uploads
+      let mediaInfo: { type: string; id: string; mime_type: string; filename?: string } | null = null
+      if (message.type === 'image' && message.image) {
+        mediaInfo = {
+          type: 'image',
+          id: message.image.id,
+          mime_type: message.image.mime_type,
+        }
+      } else if (message.type === 'document' && message.document) {
+        mediaInfo = {
+          type: 'document',
+          id: message.document.id,
+          mime_type: message.document.mime_type,
+          filename: message.document.filename,
+        }
+      }
+      
       const botResponse = await fetch(`${supabaseUrl}/functions/v1/hotel-bot`, {
         method: 'POST',
         headers: {
@@ -214,6 +233,8 @@ async function processIncomingMessage(
           access_token: waNumber.access_token,
           from_phone: contactPhone,
           message_text: messageContent,
+          message_type: message.type,
+          media_info: mediaInfo,
           contact_name: contactName,
         }),
       })

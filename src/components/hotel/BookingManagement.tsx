@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,9 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { HotelBooking, RoomType, BookingStatus, BOOKING_STATUS_LABELS } from '@/lib/hotel-types';
-import { Search, CalendarCheck, Phone, User, BedDouble, Calendar, Filter, Trash2 } from 'lucide-react';
+import { Search, CalendarCheck, Phone, User, BedDouble, Calendar, Filter, Trash2, FileImage, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BookingManagementProps {
   bookings: HotelBooking[];
@@ -43,6 +45,59 @@ export function BookingManagement({ bookings, rooms, onUpdateStatus, onDelete }:
 
   const getRoomName = (roomId: string) => {
     return rooms.find(r => r.id === roomId)?.name || 'Unknown Room';
+  };
+
+  const getSignedUrl = async (path: string) => {
+    const { data } = await supabase.storage
+      .from('guest-ids')
+      .createSignedUrl(path, 3600); // 1 hour expiry
+    return data?.signedUrl;
+  };
+
+  const IdDocumentsViewer = ({ documents }: { documents: string[] }) => {
+    const [urls, setUrls] = useState<string[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      const loadUrls = async () => {
+        const signedUrls = await Promise.all(
+          documents.map(path => getSignedUrl(path))
+        );
+        setUrls(signedUrls.filter(Boolean) as string[]);
+        setLoading(false);
+      };
+      loadUrls();
+    }, [documents]);
+
+    if (loading) return <p className="text-sm text-muted-foreground">Loading...</p>;
+
+    return (
+      <div className="grid grid-cols-2 gap-3">
+        {urls.map((url, idx) => {
+          const isImage = documents[idx]?.match(/\.(jpg|jpeg|png|webp)$/i);
+          return (
+            <div key={idx} className="border rounded-lg p-2">
+              {isImage ? (
+                <img src={url} alt={`ID ${idx + 1}`} className="w-full h-32 object-cover rounded" />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-32 bg-muted rounded">
+                  <FileImage className="h-8 w-8 text-muted-foreground mb-2" />
+                  <span className="text-xs">PDF Document</span>
+                </div>
+              )}
+              <a 
+                href={url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1 text-xs text-primary mt-2 hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> Open
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
@@ -121,6 +176,7 @@ export function BookingManagement({ bookings, rooms, onUpdateStatus, onDelete }:
                     <TableHead>Room</TableHead>
                     <TableHead>Dates</TableHead>
                     <TableHead>Guests</TableHead>
+                    <TableHead>ID Docs</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -166,6 +222,26 @@ export function BookingManagement({ bookings, rooms, onUpdateStatus, onDelete }:
                           <span className="text-sm">
                             {booking.adults}A, {booking.children}C
                           </span>
+                        </TableCell>
+                        <TableCell>
+                          {booking.id_documents && booking.id_documents.length > 0 ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-7 px-2">
+                                  <FileImage className="h-3 w-3 mr-1" />
+                                  {booking.id_documents.length}
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>ID Documents - {booking.booking_id}</DialogTitle>
+                                </DialogHeader>
+                                <IdDocumentsViewer documents={booking.id_documents} />
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant={

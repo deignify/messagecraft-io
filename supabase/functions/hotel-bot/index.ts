@@ -11,6 +11,13 @@ interface HotelBotRequest {
   access_token: string;
   from_phone: string;
   message_text: string;
+  message_type?: 'text' | 'image' | 'document';
+  media_info?: {
+    type: string;
+    id: string;
+    mime_type: string;
+    filename?: string;
+  };
   contact_name?: string;
 }
 
@@ -113,6 +120,77 @@ async function sendWhatsAppImage(
   }
 }
 
+// Download media from WhatsApp and upload to Supabase Storage
+async function downloadAndUploadMedia(
+  phoneNumberId: string,
+  accessToken: string,
+  mediaId: string,
+  mimeType: string,
+  bookingId: string,
+  supabase: any
+): Promise<string | null> {
+  try {
+    // Step 1: Get media URL from WhatsApp
+    const mediaInfoResponse = await fetch(
+      `https://graph.facebook.com/v21.0/${mediaId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    )
+    const mediaInfo = await mediaInfoResponse.json()
+    console.log('Media info:', mediaInfo)
+    
+    if (!mediaInfo.url) {
+      console.error('No media URL in response')
+      return null
+    }
+    
+    // Step 2: Download the media file
+    const mediaResponse = await fetch(mediaInfo.url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    })
+    
+    if (!mediaResponse.ok) {
+      console.error('Failed to download media:', mediaResponse.status)
+      return null
+    }
+    
+    const mediaBuffer = await mediaResponse.arrayBuffer()
+    
+    // Step 3: Determine file extension
+    let extension = 'jpg'
+    if (mimeType.includes('png')) extension = 'png'
+    else if (mimeType.includes('pdf')) extension = 'pdf'
+    else if (mimeType.includes('webp')) extension = 'webp'
+    
+    // Step 4: Upload to Supabase Storage
+    const fileName = `${bookingId}/${Date.now()}.${extension}`
+    
+    const { error: uploadError } = await supabase.storage
+      .from('guest-ids')
+      .upload(fileName, mediaBuffer, {
+        contentType: mimeType,
+        upsert: false,
+      })
+    
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      return null
+    }
+    
+    // Step 5: Get public URL (bucket is private, but we store the path)
+    // For private buckets, we store the path and use signed URLs when needed
+    return fileName
+  } catch (error) {
+    console.error('Error downloading/uploading media:', error)
+    return null
+  }
+}
+
 // Helper: Parse date from various formats (10 Feb 2026, 10/02/2026, etc.)
 function parseDate(input: string): { valid: boolean; date?: Date; formatted?: string; dbFormat?: string } {
   const trimmed = input.trim()
@@ -192,9 +270,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const body: HotelBotRequest = await req.json()
-    const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, contact_name } = body
+    const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, message_type, media_info, contact_name } = body
 
-    console.log('Hotel bot processing message:', message_text, 'from:', from_phone)
+    console.log('Hotel bot processing message:', message_text, 'type:', message_type, 'from:', from_phone)
 
     // Get hotel for this WhatsApp number
     const { data: hotel, error: hotelError } = await supabase
@@ -723,6 +801,8 @@ Deno.serve(async (req) => {
         if (bookingError) {
           console.error('Booking error:', bookingError)
           response = `❌ Sorry, there was an error. Please try again.\n\n_Reply 0️⃣ for Main Menu_`
+          newState = 'main_menu'
+          session.data = {}
         } else {
           response = `🎉 *Booking Confirmed!*\n\n`
           response += `📌 Booking ID: *${bookingId}*\n\n`
@@ -730,10 +810,21 @@ Deno.serve(async (req) => {
           response += `We look forward to hosting you 😊\n\n`
           if (hotel.google_maps_link) response += `📍 Location: ${hotel.google_maps_link}\n`
           if (hotel.phone) response += `📞 Reception: ${hotel.phone}\n`
-          response += `\n_Reply 0️⃣ for Main Menu_`
+          response += `\n━━━━━━━━━━━━━━━━━━━━\n`
+          response += `📷 *ID Verification (Optional)*\n`
+          response += `You can upload your ID proof now.\n`
+          response += `Send up to 3 images or PDFs.\n\n`
+          response += `1️⃣ Upload ID Now\n`
+          response += `2️⃣ Skip & Continue\n`
+          response += `0️⃣ Main Menu`
+          
+          // Store booking ID for ID upload
+          session.data = { 
+            confirmed_booking_id: bookingId,
+            id_upload_count: 0 
+          }
+          newState = 'id_upload_prompt'
         }
-        newState = 'main_menu'
-        session.data = {}
       } else if (msg === '2') {
         // Change dates/room - restart booking
         response = `📝 Please enter your *full name*:`
@@ -741,6 +832,105 @@ Deno.serve(async (req) => {
         newState = 'booking_name'
       } else {
         response = getErrorResponse()
+      }
+    }
+    // ============ ID UPLOAD FLOW ============
+    // ID Upload Prompt - user chooses to upload or skip
+    else if (session.state === 'id_upload_prompt') {
+      if (msg === '1') {
+        response = `📷 *Upload ID Proof*\n\n`
+        response += `Please send your ID document as an image or PDF.\n`
+        response += `You can upload up to 3 documents.\n\n`
+        response += `_Accepted: JPG, PNG, PDF_\n`
+        response += `_Max size: 5MB per file_\n\n`
+        response += `Reply *done* when finished, or *skip* to continue without uploading.`
+        newState = 'id_upload_waiting'
+      } else if (msg === '2' || msg === 'skip') {
+        response = `✅ Booking complete!\n\nYou can upload your ID later if needed.\n\n_Reply 0️⃣ for Main Menu_`
+        newState = 'main_menu'
+        session.data = {}
+      } else {
+        response = getErrorResponse()
+      }
+    }
+    // ID Upload Waiting - receiving images/documents
+    else if (session.state === 'id_upload_waiting') {
+      const currentCount = (session.data.id_upload_count as number) || 0
+      const bookingId = session.data.confirmed_booking_id as string
+      
+      // Check if user wants to finish
+      if (msg === 'done' || msg === 'finish' || msg === 'complete') {
+        if (currentCount > 0) {
+          response = `✅ *ID Upload Complete!*\n\n`
+          response += `${currentCount} document(s) uploaded successfully.\n`
+          response += `Thank you for your submission.\n\n`
+          response += `_Reply 0️⃣ for Main Menu_`
+        } else {
+          response = `ℹ️ No documents were uploaded.\n\nYou can upload later if needed.\n\n_Reply 0️⃣ for Main Menu_`
+        }
+        newState = 'main_menu'
+        session.data = {}
+      }
+      else if (msg === 'skip') {
+        response = `✅ Skipped ID upload.\n\nYou can upload later if needed.\n\n_Reply 0️⃣ for Main Menu_`
+        newState = 'main_menu'
+        session.data = {}
+      }
+      // Check if this is a media message
+      else if (media_info && (message_type === 'image' || message_type === 'document')) {
+        if (currentCount >= 3) {
+          response = `⚠️ Maximum 3 documents allowed.\n\nReply *done* to finish or 0️⃣ for Main Menu.`
+        } else {
+          // Download and upload the media
+          const uploadedPath = await downloadAndUploadMedia(
+            phone_number_id,
+            access_token,
+            media_info.id,
+            media_info.mime_type,
+            bookingId,
+            supabase
+          )
+          
+          if (uploadedPath) {
+            // Update booking with ID document path
+            const { data: existingBooking } = await supabase
+              .from('hotel_bookings')
+              .select('id_documents')
+              .eq('booking_id', bookingId)
+              .eq('hotel_id', hotel.id)
+              .single()
+            
+            const existingDocs = (existingBooking?.id_documents as string[]) || []
+            const updatedDocs = [...existingDocs, uploadedPath]
+            
+            await supabase
+              .from('hotel_bookings')
+              .update({ id_documents: updatedDocs })
+              .eq('booking_id', bookingId)
+              .eq('hotel_id', hotel.id)
+            
+            const newCount = currentCount + 1
+            session.data.id_upload_count = newCount
+            
+            if (newCount >= 3) {
+              response = `✅ Document ${newCount}/3 uploaded!\n\n`
+              response += `Maximum limit reached.\n`
+              response += `Reply *done* to finish.`
+            } else {
+              response = `✅ Document ${newCount}/3 uploaded!\n\n`
+              response += `Send another document or reply *done* when finished.`
+            }
+          } else {
+            response = `❌ Failed to upload document. Please try again.\n\n`
+            response += `Make sure it's a JPG, PNG, or PDF under 5MB.`
+          }
+        }
+      } else {
+        response = `📷 Please send an image or PDF document.\n\n`
+        response += `Or reply:\n`
+        response += `• *done* - Finish uploading\n`
+        response += `• *skip* - Skip ID upload\n`
+        response += `• 0️⃣ - Main Menu`
       }
     }
     // ============ CHECK BOOKING STATUS ============

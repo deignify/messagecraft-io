@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json()
+      console.log('Webhook received:', JSON.stringify(body, null, 2))
+      
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
       await supabase.from('webhook_logs').insert({
@@ -59,6 +61,7 @@ Deno.serve(async (req) => {
         payload: body,
         processed: false,
       })
+      console.log('Webhook logged to database')
 
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
@@ -68,19 +71,33 @@ Deno.serve(async (req) => {
           const phoneNumberId = value.metadata?.phone_number_id
           if (!phoneNumberId) continue
 
-          const { data: waNumber } = await supabase
+          console.log('Processing phone_number_id:', phoneNumberId)
+          
+          const { data: waNumber, error: waError } = await supabase
             .from('whatsapp_numbers')
             .select('id, user_id, access_token')
             .eq('phone_number_id', phoneNumberId)
-            .single()
+            .maybeSingle()
 
-          if (!waNumber) continue
+          if (waError) {
+            console.error('Error fetching WhatsApp number:', waError)
+            continue
+          }
+          
+          if (!waNumber) {
+            console.log('No WhatsApp number found for phone_number_id:', phoneNumberId)
+            continue
+          }
+          
+          console.log('Found WhatsApp number:', waNumber.id)
 
           for (const message of value.messages || []) {
+            console.log('Processing inbound message from:', message.from, 'type:', message.type)
             await processIncomingMessage(supabase, waNumber as { id: string; user_id: string; access_token: string }, message, value.contacts?.[0])
           }
 
           for (const status of value.statuses || []) {
+            console.log('Processing status update:', status.status, 'for message:', status.id)
             await processStatusUpdate(supabase, waNumber as { id: string; user_id: string }, status)
           }
         }

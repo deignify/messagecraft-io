@@ -29,6 +29,83 @@ interface WebhookStatus {
   errors?: Array<{ code: number; title: string }>;
 }
 
+// Download media from WhatsApp and upload to Supabase Storage
+async function downloadAndStoreMedia(
+  accessToken: string,
+  mediaId: string,
+  mimeType: string,
+  supabase: any
+): Promise<string | null> {
+  try {
+    // Step 1: Get media URL from WhatsApp
+    const mediaInfoResponse = await fetch(
+      `https://graph.facebook.com/v21.0/${mediaId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    )
+    const mediaInfo = await mediaInfoResponse.json()
+    console.log('Media info fetched:', mediaInfo.url ? 'URL obtained' : 'No URL')
+    
+    if (!mediaInfo.url) {
+      console.error('No media URL in response')
+      return null
+    }
+    
+    // Step 2: Download the media file
+    const mediaResponse = await fetch(mediaInfo.url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    })
+    
+    if (!mediaResponse.ok) {
+      console.error('Failed to download media:', mediaResponse.status)
+      return null
+    }
+    
+    const mediaBuffer = await mediaResponse.arrayBuffer()
+    
+    // Step 3: Determine file extension
+    let extension = 'jpg'
+    if (mimeType.includes('png')) extension = 'png'
+    else if (mimeType.includes('gif')) extension = 'gif'
+    else if (mimeType.includes('webp')) extension = 'webp'
+    else if (mimeType.includes('pdf')) extension = 'pdf'
+    else if (mimeType.includes('mp4')) extension = 'mp4'
+    else if (mimeType.includes('ogg')) extension = 'ogg'
+    else if (mimeType.includes('mp3')) extension = 'mp3'
+    
+    // Step 4: Upload to Supabase Storage (chat-media bucket)
+    const fileName = `chat-media/${Date.now()}-${mediaId}.${extension}`
+    
+    const { error: uploadError } = await supabase.storage
+      .from('room-photos') // Using existing public bucket for chat media
+      .upload(fileName, mediaBuffer, {
+        contentType: mimeType,
+        upsert: false,
+      })
+    
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      return null
+    }
+    
+    // Step 5: Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('room-photos')
+      .getPublicUrl(fileName)
+    
+    console.log('Media uploaded, public URL:', publicUrl)
+    return publicUrl
+  } catch (error) {
+    console.error('Error downloading/uploading media:', error)
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   const WEBHOOK_VERIFY_TOKEN = Deno.env.get('WEBHOOK_VERIFY_TOKEN')
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -188,6 +265,30 @@ async function processIncomingMessage(
     }).eq('id', conversationId)
   }
 
+  // Download and store media if it's an image or document
+  let mediaUrl: string | null = null
+  let mediaMimeType: string | null = null
+  
+  if (message.type === 'image' && message.image) {
+    console.log('Downloading image media:', message.image.id)
+    mediaUrl = await downloadAndStoreMedia(
+      waNumber.access_token,
+      message.image.id,
+      message.image.mime_type,
+      supabase
+    )
+    mediaMimeType = message.image.mime_type
+  } else if (message.type === 'document' && message.document) {
+    console.log('Downloading document media:', message.document.id)
+    mediaUrl = await downloadAndStoreMedia(
+      waNumber.access_token,
+      message.document.id,
+      message.document.mime_type,
+      supabase
+    )
+    mediaMimeType = message.document.mime_type
+  }
+
   await supabase.from('messages').insert({
     user_id: waNumber.user_id,
     conversation_id: conversationId,
@@ -196,6 +297,8 @@ async function processIncomingMessage(
     direction: 'inbound',
     type: message.type as 'text' | 'image' | 'video' | 'audio' | 'document' | 'location',
     content: messageContent,
+    media_url: mediaUrl,
+    media_mime_type: mediaMimeType,
     status: 'delivered',
   })
 

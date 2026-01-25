@@ -17,6 +17,11 @@ import {
   Clock,
   User,
   Loader2,
+  Image as ImageIcon,
+  FileText,
+  MapPin,
+  Video,
+  Mic,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message } from '@/lib/supabase-types';
@@ -319,9 +324,53 @@ export default function LiveChat() {
                           : "bg-chat-inbound rounded-bl-md"
                       )}
                     >
-                      <p className="text-sm text-foreground whitespace-pre-wrap">
-                        {message.content}
-                      </p>
+                      {/* Render based on message type */}
+                      {message.type === 'image' ? (
+                        <div className="space-y-2">
+                          {message.media_url ? (
+                            <img 
+                              src={message.media_url} 
+                              alt="Image" 
+                              className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(message.media_url || '', '_blank')}
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <ImageIcon className="h-4 w-4" />
+                              <span>Image</span>
+                            </div>
+                          )}
+                          {message.content && message.content !== '[Image]' && (
+                            <p className="text-sm text-foreground whitespace-pre-wrap">
+                              {message.content}
+                            </p>
+                          )}
+                        </div>
+                      ) : message.type === 'video' ? (
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <Video className="h-4 w-4" />
+                          <span>{message.content || 'Video'}</span>
+                        </div>
+                      ) : message.type === 'audio' ? (
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <Mic className="h-4 w-4" />
+                          <span>{message.content || 'Audio'}</span>
+                        </div>
+                      ) : message.type === 'document' ? (
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <FileText className="h-4 w-4" />
+                          <span>{message.content || 'Document'}</span>
+                        </div>
+                      ) : message.type === 'location' ? (
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <MapPin className="h-4 w-4" />
+                          <span>{message.content || 'Location'}</span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-foreground whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      )}
                       <div className="flex items-center justify-end gap-1 mt-1">
                         <span className="text-[10px] text-chat-time">
                           {formatMessageTime(message.created_at)}

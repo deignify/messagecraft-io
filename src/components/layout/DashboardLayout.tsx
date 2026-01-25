@@ -33,6 +33,7 @@ import {
   LogOut,
   ChevronDown,
   Plus,
+  Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,7 @@ const navItems = [
   { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
   { icon: FileText, label: 'Templates', path: '/dashboard/templates' },
   { icon: Zap, label: 'Automation', path: '/dashboard/automation' },
+  { icon: Building2, label: 'Hotel Bot', path: '/dashboard/hotel' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 

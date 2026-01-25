@@ -221,24 +221,6 @@ export default function Templates() {
     ...filteredCustomTemplates,
   ];
 
-  const handleCreateSampleTemplate = async () => {
-    const sampleData: CreateTemplateInput = {
-      template_name: 'welcome_message',
-      category: 'utility',
-      language: 'en',
-      header_type: 'text',
-      header_text: 'Welcome to Our Service!',
-      body_text: 'Hello {{1}}, thank you for joining us! Your account has been created successfully. Your reference number is {{2}}.',
-      footer_text: 'Reply STOP to unsubscribe',
-      variables: { '1': 'Customer Name', '2': 'Reference Number' },
-      buttons: [
-        { type: 'quick_reply', text: 'Get Started' },
-        { type: 'url', text: 'Visit Website', url: 'https://example.com' },
-      ],
-    };
-    await createTemplate(sampleData, true);
-  };
-
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Header */}
@@ -252,9 +234,9 @@ export default function Templates() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={handleCreateSampleTemplate} disabled={saving}>
-            <FileText className="h-4 w-4" />
-            Sample Template
+          <Button variant="outline" onClick={handleSyncTemplates} disabled={syncing}>
+            <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+            {syncing ? 'Syncing...' : 'Sync from Meta'}
           </Button>
           <Button variant="hero" onClick={handleCreateTemplate}>
             <Plus className="h-4 w-4" />
@@ -294,16 +276,10 @@ export default function Templates() {
           <p className="text-muted-foreground mb-6">
             Create your first template or sync from Meta to get started
           </p>
-          <div className="flex items-center justify-center gap-3">
-            <Button variant="outline" onClick={handleCreateSampleTemplate} disabled={saving}>
-              <FileText className="h-4 w-4 mr-2" />
-              Sample Template
-            </Button>
-            <Button onClick={handleCreateTemplate}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Template
-            </Button>
-          </div>
+          <Button onClick={handleCreateTemplate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Template
+          </Button>
         </div>
       ) : (
         <div className="space-y-6">

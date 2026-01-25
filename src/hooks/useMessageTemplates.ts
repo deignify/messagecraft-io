@@ -56,7 +56,7 @@ export function useMessageTemplates() {
     fetchTemplates();
   }, [fetchTemplates]);
 
-  const createTemplate = async (input: CreateTemplateInput, submitForReview: boolean = false): Promise<MessageTemplate | null> => {
+  const createTemplate = async (input: CreateTemplateInput, submitToMeta: boolean = false): Promise<MessageTemplate | null> => {
     if (!user || !selectedNumber) {
       toast({
         title: 'Error',
@@ -68,14 +68,14 @@ export function useMessageTemplates() {
 
     setSaving(true);
     try {
-      const templateStatus = submitForReview ? 'pending' : 'draft';
+      // Always create as pending when submitting
       const insertData = {
         user_id: user.id,
         whatsapp_number_id: selectedNumber.id,
         template_name: input.template_name,
         category: input.category,
         language: input.language,
-        status: templateStatus,
+        status: 'pending' as const,
         header_type: input.header_type,
         header_text: input.header_text || null,
         header_media_url: input.header_media_url || null,
@@ -99,15 +99,45 @@ export function useMessageTemplates() {
         buttons: (data.buttons as unknown as TemplateButton[]) || [],
       };
 
-      setTemplates((prev) => [newTemplate, ...prev]);
-      
-      toast({
-        title: 'Success',
-        description: submitForReview 
-          ? 'Template submitted for review' 
-          : 'Template saved as draft',
-      });
+      // Submit to Meta API for review
+      if (submitToMeta) {
+        try {
+          const { error: submitError } = await supabase.functions.invoke('submit-template', {
+            body: { 
+              template_id: newTemplate.id,
+              whatsapp_number_id: selectedNumber.id,
+            },
+          });
 
+          if (submitError) {
+            console.error('Meta submission error:', submitError);
+            toast({
+              title: 'Template saved',
+              description: 'Template saved locally but Meta submission failed. You can retry later.',
+              variant: 'default',
+            });
+          } else {
+            toast({
+              title: 'Template submitted',
+              description: 'Template submitted to Meta for review',
+            });
+          }
+        } catch (metaError) {
+          console.error('Meta submission error:', metaError);
+          toast({
+            title: 'Template saved',
+            description: 'Template saved locally but Meta submission failed.',
+            variant: 'default',
+          });
+        }
+      } else {
+        toast({
+          title: 'Success',
+          description: 'Template created successfully',
+        });
+      }
+
+      setTemplates((prev) => [newTemplate, ...prev]);
       return newTemplate;
     } catch (error: any) {
       console.error('Error creating template:', error);
@@ -202,14 +232,26 @@ export function useMessageTemplates() {
   };
 
   const submitForReview = async (id: string): Promise<boolean> => {
+    if (!selectedNumber) {
+      toast({
+        title: 'Error',
+        description: 'No WhatsApp number selected',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('message_templates')
-        .update({ status: 'pending' })
-        .eq('id', id);
+      // Submit to Meta API
+      const { error: submitError } = await supabase.functions.invoke('submit-template', {
+        body: { 
+          template_id: id,
+          whatsapp_number_id: selectedNumber.id,
+        },
+      });
 
-      if (error) throw error;
+      if (submitError) throw submitError;
 
       setTemplates((prev) =>
         prev.map((t) => (t.id === id ? { ...t, status: 'pending' as const } : t))
@@ -217,7 +259,7 @@ export function useMessageTemplates() {
 
       toast({
         title: 'Submitted',
-        description: 'Template submitted for review',
+        description: 'Template submitted to Meta for review',
       });
 
       return true;

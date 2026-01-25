@@ -248,308 +248,272 @@ Deno.serve(async (req) => {
     const msg = message_text.toLowerCase().trim()
     let response = ''
     let newState = session.state
+    let handled = false
 
     // Helper function to show main menu
     const getMainMenuResponse = () => {
-      let menuText = `🏨 Welcome to *${hotel.name}*!\n\n`
-      if (hotel.description) menuText += `${hotel.description}\n\n`
-      menuText += `How can I help you today?\n\n`
+      let menuText = `🏨 *${hotel.name}*\n\n`
+      menuText += `Reply with a number:\n\n`
       menuText += `1️⃣ Hotel Information\n`
-      menuText += `2️⃣ View Rooms & Prices\n`
-      menuText += `3️⃣ Make a Booking\n`
-      menuText += `4️⃣ Check Booking Status\n`
+      menuText += `2️⃣ Room Types & Pricing\n`
+      menuText += `3️⃣ Make a Booking Inquiry\n`
+      menuText += `4️⃣ Hotel Address & Location\n`
       menuText += `5️⃣ Contact Us\n`
-      menuText += `6️⃣ Location & Directions\n\n`
-      menuText += `_Reply with a number (1-6) to continue_`
+      menuText += `6️⃣ Check Booking Status\n\n`
+      menuText += `_Reply 0 anytime for menu_`
       return menuText
     }
 
-    // Process based on current state and message
-    // Keywords that trigger menu regardless of state
+    // Helper to fetch rooms
+    const fetchRooms = async () => {
+      const { data: rooms } = await supabase
+        .from('room_types')
+        .select('*')
+        .eq('hotel_id', hotel.id)
+        .eq('is_available', true)
+        .order('display_order')
+      return rooms || []
+    }
+
+    // MAIN MENU SHORTCUTS - These work from ANY state
+    // 0 = menu, 1 = hotel info, 2 = rooms, 3 = booking, 4 = location, 5 = contact, 6 = check status
     const isMenuTrigger = ['hi', 'hello', 'menu', 'start', 'hey', 'hii', '0', 'back'].includes(msg)
     
-    if (isMenuTrigger || session.state === 'welcome') {
+    if (isMenuTrigger) {
       response = getMainMenuResponse()
       newState = 'main_menu'
+      session.data = {} // Clear any ongoing flow
+      handled = true
     }
-    // Handle main menu selections (1-6)
-    else if (session.state === 'main_menu' && ['1', '2', '3', '4', '5', '6'].includes(msg)) {
-      if (msg === '1') {
-        // Hotel Information
-        response = `🏨 *${hotel.name}*\n\n`
-        if (hotel.description) response += `📝 ${hotel.description}\n\n`
-        if (hotel.phone) response += `📞 Phone: ${hotel.phone}\n`
-        if (hotel.email) response += `📧 Email: ${hotel.email}\n`
-        if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
-        if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
-        if (hotel.languages?.length) response += `🗣️ Languages: ${hotel.languages.join(', ')}\n`
-        if (hotel.cancellation_policy) response += `\n📋 *Cancellation Policy:*\n${hotel.cancellation_policy}\n`
-        response += `\n_Reply "menu" to go back_`
-        newState = 'main_menu'
-      }
-      else if (msg === '2') {
-        // View Rooms
-        const { data: rooms } = await supabase
-          .from('room_types')
-          .select('*, room_photos(*)')
-          .eq('hotel_id', hotel.id)
-          .eq('is_available', true)
-          .order('display_order')
-
-        if (!rooms?.length) {
-          response = `😔 No rooms available at the moment.\n\n_Reply "menu" to go back_`
-          newState = 'main_menu'
-        } else {
-          response = `🛏️ *Available Rooms at ${hotel.name}*\n\n`
-          rooms.forEach((room, index) => {
-            response += `*${index + 1}. ${room.name}*\n`
-            response += `👥 Capacity: ${room.max_adults} Adults, ${room.max_children} Children\n`
-            response += `❄️ ${room.is_ac ? 'AC' : 'Non-AC'}\n`
-            if (room.base_price) response += `💰 Price: ₹${room.base_price}/night\n`
-            if (room.amenities?.length) response += `✨ ${room.amenities.slice(0, 3).join(', ')}${room.amenities.length > 3 ? '...' : ''}\n`
-            response += `\n`
-          })
-          response += `_Reply with room number (1-${rooms.length}) to book, or "menu" to go back_`
-          session.data.rooms = rooms
-          newState = 'select_room'
-        }
-      }
-      else if (msg === '3') {
-        // Start booking flow
-        const { data: rooms } = await supabase
-          .from('room_types')
-          .select('*')
-          .eq('hotel_id', hotel.id)
-          .eq('is_available', true)
-          .order('display_order')
-
-        if (!rooms?.length) {
-          response = `😔 No rooms available for booking.\n\n_Reply "menu" to go back_`
-          newState = 'main_menu'
-        } else {
-          response = `📋 *Make a Booking*\n\nPlease select a room:\n\n`
-          rooms.forEach((room, index) => {
-            response += `${index + 1}. ${room.name}`
-            if (room.base_price) response += ` - ₹${room.base_price}/night`
-            response += `\n`
-          })
-          response += `\n_Reply with room number to continue_`
-          session.data.rooms = rooms
-          newState = 'booking_select_room'
-        }
-      }
-      else if (msg === '4') {
-        // Check booking status
-        response = `🔍 *Check Booking Status*\n\nPlease enter your Booking ID (e.g., HC-12345):`
-        newState = 'check_booking'
-      }
-      else if (msg === '5') {
-        // Contact Us
-        response = `📞 *Contact ${hotel.name}*\n\n`
-        if (hotel.phone) response += `📱 Phone: ${hotel.phone}\n`
-        if (hotel.email) response += `📧 Email: ${hotel.email}\n`
-        if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
-        if (hotel.reception_timing) response += `🕐 Reception Hours: ${hotel.reception_timing}\n`
-        response += `\n💬 You can also chat with us right here on WhatsApp!\n`
-        response += `\n_Reply "menu" to go back_`
-        newState = 'main_menu'
-      }
-      else if (msg === '6') {
-        // Location
-        response = `📍 *Location & Directions*\n\n`
-        if (hotel.address) response += `🏨 Address:\n${hotel.address}\n\n`
-        if (hotel.google_maps_link) response += `🗺️ Google Maps:\n${hotel.google_maps_link}\n\n`
-        else response += `📍 Map link not available.\n\n`
-        response += `_Reply "menu" to go back_`
-        newState = 'main_menu'
-      }
+    else if (msg === '1') {
+      // Hotel Information - works from any state
+      response = `🏨 *${hotel.name}*\n\n`
+      if (hotel.description) response += `${hotel.description}\n\n`
+      if (hotel.phone) response += `📞 Phone: ${hotel.phone}\n`
+      if (hotel.email) response += `📧 Email: ${hotel.email}\n`
+      if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
+      if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
+      if (hotel.languages?.length) response += `🗣️ Languages: ${hotel.languages.join(', ')}\n`
+      if (hotel.cancellation_policy) response += `\n📋 *Cancellation Policy:*\n${hotel.cancellation_policy}\n`
+      response += `\n_Reply 0 for menu_`
+      newState = 'main_menu'
+      handled = true
     }
-    // Handle room selection from "View Rooms" flow
-    else if (session.state === 'select_room') {
-      const roomIndex = parseInt(msg) - 1
-      const rooms = session.data.rooms as Array<{ id: string; name: string; base_price?: number; description?: string; amenities?: string[]; max_adults?: number; max_children?: number; is_ac?: boolean }>
-      
-      if (!isNaN(roomIndex) && roomIndex >= 0 && roomIndex < rooms.length) {
-        const room = rooms[roomIndex]
-        response = `🛏️ *${room.name}*\n\n`
-        if (room.description) response += `📝 ${room.description}\n\n`
-        response += `👥 Capacity: ${room.max_adults || 2} Adults, ${room.max_children || 1} Children\n`
-        response += `❄️ ${room.is_ac ? 'Air Conditioned' : 'Non-AC'}\n`
-        if (room.base_price) response += `💰 Price: ₹${room.base_price}/night\n`
-        if (room.amenities?.length) response += `\n✨ *Amenities:*\n${room.amenities.map(a => `• ${a}`).join('\n')}\n`
-        response += `\n📅 Would you like to book this room?\n\n`
-        response += `Reply *"book"* to proceed with booking\nReply *"menu"* to go back to main menu`
-        session.data.selected_room = room
-        newState = 'room_detail'
+    else if (msg === '2') {
+      // View Rooms - works from any state
+      const rooms = await fetchRooms()
+      if (!rooms.length) {
+        response = `😔 No rooms available at the moment.\n\n_Reply 0 for menu_`
       } else {
-        response = `❌ Invalid selection. Please enter a number between 1 and ${rooms?.length || 1}, or "menu" to go back.`
+        response = `🛏️ *Room Types - ${hotel.name}*\n\n`
+        rooms.forEach((room) => {
+          response += `*${room.name}*\n`
+          response += `₹${room.base_price || 'N/A'}/night • Max ${room.max_adults} guests`
+          response += `\n\n`
+        })
+        response += `_Reply 3 to book, 1 for info, 0 for menu_`
       }
+      newState = 'main_menu'
+      handled = true
     }
-    // Handle room detail actions
-    else if (session.state === 'room_detail') {
-      if (msg === 'book' || msg === 'yes') {
-        response = `📋 *Booking: ${(session.data.selected_room as { name: string })?.name}*\n\nPlease enter your *full name*:`
-        newState = 'booking_name'
-      } else {
-        response = `Reply *"book"* to proceed with booking or *"menu"* to go back.`
-      }
+    else if (msg === '3') {
+      // Start Booking Inquiry - works from any state
+      response = `📅 *Booking Inquiry*\n\nPlease enter your *full name*:`
+      newState = 'booking_name'
+      session.data = {} // Reset booking data
+      handled = true
     }
-    // Handle room selection from "Make a Booking" flow
-    else if (session.state === 'booking_select_room') {
-      const roomIndex = parseInt(msg) - 1
-      const rooms = session.data.rooms as Array<{ id: string; name: string; base_price?: number }>
-      
-      if (!isNaN(roomIndex) && roomIndex >= 0 && roomIndex < rooms.length) {
-        session.data.selected_room = rooms[roomIndex]
-        response = `✅ You selected: *${rooms[roomIndex].name}*\n\n`
-        response += `Please enter your *full name*:`
-        newState = 'booking_name'
-      } else {
-        response = `❌ Invalid selection. Please enter a number between 1 and ${rooms?.length || 1}`
-      }
+    else if (msg === '4') {
+      // Location - works from any state
+      response = `📍 *Hotel Address & Location*\n\n`
+      if (hotel.address) response += `🏨 ${hotel.address}\n\n`
+      if (hotel.google_maps_link) response += `🗺️ Google Maps:\n${hotel.google_maps_link}\n\n`
+      else response += `📍 Contact us for directions.\n\n`
+      response += `_Reply 0 for menu_`
+      newState = 'main_menu'
+      handled = true
+    }
+    else if (msg === '5') {
+      // Contact Us - works from any state
+      response = `📞 *Contact Us*\n\n`
+      if (hotel.phone) response += `📱 Phone: ${hotel.phone}\n`
+      if (hotel.email) response += `📧 Email: ${hotel.email}\n`
+      if (hotel.website) response += `🌐 Website: ${hotel.website}\n`
+      if (hotel.reception_timing) response += `🕐 Reception: ${hotel.reception_timing}\n`
+      response += `\n💬 You can also chat with us right here!\n`
+      response += `\n_Reply 0 for menu_`
+      newState = 'main_menu'
+      handled = true
+    }
+    else if (msg === '6') {
+      // Check Booking Status - works from any state
+      response = `🔍 *Check Booking Status*\n\nPlease enter your Booking ID:`
+      newState = 'check_booking'
+      handled = true
+    }
+    else if (session.state === 'welcome') {
+      // First time user - show menu
+      response = getMainMenuResponse()
+      newState = 'main_menu'
+      handled = true
     }
     // Booking flow - collect guest name
-    else if (session.state === 'booking_name') {
+    if (!handled && session.state === 'booking_name') {
       const guestName = message_text.trim()
       if (guestName.length >= 2) {
         session.data.guest_name = guestName
-        response = `👤 Name: *${guestName}*\n\nNow please enter your *check-in date* (DD/MM/YYYY):`
+        response = `Thank you, *${guestName}*!\n\nPlease enter your *check-in date* (DD/MM/YYYY):`
         newState = 'booking_checkin'
+        handled = true
       } else {
         response = `❌ Please enter a valid name (at least 2 characters)`
+        handled = true
       }
     }
     // Booking flow - collect check-in date
-    else if (session.state === 'booking_checkin') {
+    if (!handled && session.state === 'booking_checkin') {
       const dateMatch = message_text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/)
       if (dateMatch) {
         let [, day, month, year] = dateMatch
         if (year.length === 2) year = '20' + year
-        const checkInDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-        
-        // Validate date is not in past
-        const today = new Date().toISOString().split('T')[0]
-        if (checkInDate < today) {
-          response = `❌ Check-in date cannot be in the past. Please enter a future date.`
-        } else {
-          session.data.check_in = checkInDate
-          response = `📅 Check-in: *${day}/${month}/${year}*\n\nNow please enter your *check-out date* (DD/MM/YYYY):`
-          newState = 'booking_checkout'
-        }
+        session.data.check_in = `${day}/${month}/${year}`
+        session.data.check_in_db = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+        response = `Check-in: *${day}/${month}/${year}*\n\nPlease enter your *check-out date* (DD/MM/YYYY):`
+        newState = 'booking_checkout'
+        handled = true
       } else {
-        response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 15/02/2025)`
+        response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 15/02/2026)`
+        handled = true
       }
     }
     // Booking flow - collect check-out date
-    else if (session.state === 'booking_checkout') {
+    if (!handled && session.state === 'booking_checkout') {
       const dateMatch = message_text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/)
       if (dateMatch) {
         let [, day, month, year] = dateMatch
         if (year.length === 2) year = '20' + year
-        const checkOutDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
-        const checkInDate = session.data.check_in as string
-        
-        // Validate check-out is after check-in
-        if (checkOutDate <= checkInDate) {
-          response = `❌ Check-out date must be after check-in date (${checkInDate}). Please try again.`
-        } else {
-          session.data.check_out = checkOutDate
-          response = `📅 Check-out: *${day}/${month}/${year}*\n\nHow many *adults*? (1-10)`
-          newState = 'booking_adults'
-        }
+        session.data.check_out = `${day}/${month}/${year}`
+        session.data.check_out_db = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+        response = `Check-out: *${day}/${month}/${year}*\n\nHow many *guests* will be staying?`
+        newState = 'booking_guests'
+        handled = true
       } else {
-        response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 17/02/2025)`
+        response = `❌ Invalid date format. Please use DD/MM/YYYY (e.g., 17/02/2026)`
+        handled = true
       }
     }
-    // Booking flow - collect adults count
-    else if (session.state === 'booking_adults') {
-      const adults = parseInt(msg)
-      if (!isNaN(adults) && adults >= 1 && adults <= 10) {
-        session.data.adults = adults
-        response = `👨 Adults: *${adults}*\n\nHow many *children*? (0-5)`
-        newState = 'booking_children'
+    // Booking flow - collect guests count
+    if (!handled && session.state === 'booking_guests') {
+      const guests = parseInt(msg)
+      if (!isNaN(guests) && guests >= 1 && guests <= 20) {
+        session.data.guests = guests
+        response = `*${guests}* guest(s) noted.\n\nHow many *rooms* do you need?`
+        newState = 'booking_rooms'
+        handled = true
       } else {
-        response = `❌ Please enter a number between 1 and 10`
+        response = `❌ Please enter a valid number of guests (1-20)`
+        handled = true
       }
     }
-    // Booking flow - collect children count and create booking
-    else if (session.state === 'booking_children') {
-      const children = parseInt(msg)
-      if (!isNaN(children) && children >= 0 && children <= 5) {
-        session.data.children = children
-        
+    // Booking flow - collect rooms count and show summary
+    if (!handled && session.state === 'booking_rooms') {
+      const rooms = parseInt(msg)
+      if (!isNaN(rooms) && rooms >= 1 && rooms <= 10) {
+        session.data.rooms = rooms
+        response = `📋 *Booking Summary*\n\n`
+        response += `👤 Name: ${session.data.guest_name}\n`
+        response += `📅 Check-in: ${session.data.check_in}\n`
+        response += `📅 Check-out: ${session.data.check_out}\n`
+        response += `👥 Guests: ${session.data.guests}\n`
+        response += `🛏️ Rooms: ${rooms}\n\n`
+        response += `Reply *YES* to confirm or *CANCEL* to cancel.`
+        newState = 'booking_confirm'
+        handled = true
+      } else {
+        response = `❌ Please enter a valid number of rooms (1-10)`
+        handled = true
+      }
+    }
+    // Booking flow - confirm or cancel
+    if (!handled && session.state === 'booking_confirm') {
+      if (msg === 'yes' || msg === 'confirm') {
         // Generate booking ID
         const { data: bookingIdData } = await supabase.rpc('generate_booking_id', { hotel_name: hotel.name })
-        const bookingId = bookingIdData || `BK-${Date.now().toString().slice(-5)}`
+        const bookingId = bookingIdData || `${Math.floor(10000000 + Math.random() * 90000000)}`
         
-        const selectedRoom = session.data.selected_room as { id: string; name: string; base_price?: number }
+        // Get first available room for booking record
+        const roomsList = await fetchRooms()
+        const firstRoom = roomsList[0]
         
-        // Calculate total price if base_price exists
-        const checkIn = new Date(session.data.check_in as string)
-        const checkOut = new Date(session.data.check_out as string)
-        const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24))
-        const totalPrice = selectedRoom.base_price ? selectedRoom.base_price * nights : null
-        
-        // Create booking
-        const { error: bookingError } = await supabase.from('hotel_bookings').insert({
-          hotel_id: hotel.id,
-          room_type_id: selectedRoom.id,
-          booking_id: bookingId,
-          guest_name: session.data.guest_name as string,
-          guest_phone: from_phone,
-          guest_whatsapp_phone: from_phone,
-          check_in_date: session.data.check_in as string,
-          check_out_date: session.data.check_out as string,
-          adults: session.data.adults as number,
-          children,
-          total_price: totalPrice,
-          status: 'pending',
-        })
-
-        if (bookingError) {
-          console.error('Booking error:', bookingError)
-          response = `❌ Sorry, there was an error creating your booking. Please try again later or contact us directly.\n\n_Reply "menu" to go back_`
+        if (!firstRoom) {
+          response = `❌ Sorry, no rooms available. Please contact us directly.\n\n_Reply 0 for menu_`
+          newState = 'main_menu'
+          session.data = {}
+          handled = true
         } else {
-          response = `✅ *Booking Request Submitted!*\n\n`
-          response += `━━━━━━━━━━━━━━━\n`
-          response += `🆔 Booking ID: *${bookingId}*\n`
-          response += `━━━━━━━━━━━━━━━\n\n`
-          response += `🏨 Room: ${selectedRoom.name}\n`
-          response += `👤 Guest: ${session.data.guest_name}\n`
-          response += `📅 Check-in: ${session.data.check_in}\n`
-          response += `📅 Check-out: ${session.data.check_out}\n`
-          response += `🌙 Nights: ${nights}\n`
-          response += `👥 Guests: ${session.data.adults} Adults, ${children} Children\n`
-          if (totalPrice) response += `💰 Estimated Total: ₹${totalPrice}\n`
-          response += `\n📌 Status: 🟡 *Pending Confirmation*\n\n`
-          response += `⚠️ *Save your Booking ID to check status later!*\n\n`
-          response += `_Our team will confirm your booking shortly via WhatsApp._\n\n`
-          response += `_Reply "menu" to return to main menu_`
+          // Create booking
+          const { error: bookingError } = await supabase.from('hotel_bookings').insert({
+            hotel_id: hotel.id,
+            room_type_id: firstRoom.id,
+            booking_id: bookingId,
+            guest_name: session.data.guest_name as string,
+            guest_phone: from_phone,
+            guest_whatsapp_phone: from_phone,
+            check_in_date: session.data.check_in_db as string,
+            check_out_date: session.data.check_out_db as string,
+            adults: session.data.guests as number,
+            children: 0,
+            status: 'pending',
+            notes: `Rooms requested: ${session.data.rooms}`,
+          })
+
+          if (bookingError) {
+            console.error('Booking error:', bookingError)
+            response = `❌ Sorry, there was an error. Please try again.\n\n_Reply 0 for menu_`
+          } else {
+            response = `✅ *Booking Request Received!*\n\n`
+            response += `Thank you, *${session.data.guest_name}*!\n\n`
+            response += `📋 Your Booking ID: *${bookingId}*\n`
+            response += `_Save this ID to check your booking status_\n\n`
+            response += `📅 Check-in: ${session.data.check_in}\n`
+            response += `📅 Check-out: ${session.data.check_out}\n`
+            response += `👥 Guests: ${session.data.guests}\n`
+            response += `🛏️ Rooms: ${session.data.rooms}\n\n`
+            response += `Our team will contact you shortly to confirm availability.\n\n`
+            response += `_Reply 0 for menu_`
+          }
+          newState = 'main_menu'
+          session.data = {} // Clear booking data
+          handled = true
         }
+      } else if (msg === 'cancel' || msg === 'no') {
+        response = `❌ Booking cancelled.\n\n_Reply 0 for menu_`
         newState = 'main_menu'
-        session.data = {} // Clear session data after booking
+        session.data = {}
+        handled = true
       } else {
-        response = `❌ Please enter a number between 0 and 5`
+        response = `Reply *YES* to confirm or *CANCEL* to cancel.`
+        handled = true
       }
     }
     // Check booking status flow
-    else if (session.state === 'check_booking') {
+    if (!handled && session.state === 'check_booking') {
       const bookingIdInput = message_text.trim().toUpperCase()
       
       const { data: booking } = await supabase
         .from('hotel_bookings')
         .select('*, room_types(name)')
-        .eq('booking_id', bookingIdInput)
+        .ilike('booking_id', bookingIdInput)
         .eq('hotel_id', hotel.id)
         .maybeSingle()
 
       if (booking) {
         const statusEmoji: Record<string, string> = {
-          pending: '🟡',
-          confirmed: '🟢',
-          cancelled: '🔴',
+          pending: '⏳',
+          confirmed: '✅',
+          cancelled: '❌',
           checked_in: '🔵',
-          checked_out: '⚪',
+          checked_out: '✔️',
         }
         const statusLabels: Record<string, string> = {
           pending: 'Pending Confirmation',
@@ -559,28 +523,26 @@ Deno.serve(async (req) => {
           checked_out: 'Checked Out',
         }
         
-        response = `📋 *Booking Details*\n\n`
-        response += `━━━━━━━━━━━━━━━\n`
-        response += `🆔 Booking ID: *${booking.booking_id}*\n`
-        response += `━━━━━━━━━━━━━━━\n\n`
-        response += `📌 Status: ${statusEmoji[booking.status || 'pending']} *${statusLabels[booking.status || 'pending']}*\n\n`
-        response += `🏨 Room: ${(booking.room_types as { name: string })?.name || 'N/A'}\n`
-        response += `👤 Guest: ${booking.guest_name}\n`
+        response = `📋 *Booking Status*\n\n`
+        response += `🔖 Booking ID: *${booking.booking_id}*\n`
+        response += `${statusEmoji[booking.status || 'pending']} Status: *${statusLabels[booking.status || 'pending']}*\n\n`
+        response += `👤 Name: ${booking.guest_name}\n`
         response += `📅 Check-in: ${booking.check_in_date}\n`
         response += `📅 Check-out: ${booking.check_out_date}\n`
-        response += `👥 Guests: ${booking.adults} Adults, ${booking.children || 0} Children\n`
-        if (booking.total_price) response += `💰 Total: ₹${booking.total_price}\n`
-        if (booking.notes) response += `\n📝 Notes: ${booking.notes}\n`
-        response += `\n_Reply "menu" to go back_`
+        response += `👥 Guests: ${booking.adults}\n`
+        if (booking.notes) response += `🛏️ ${booking.notes}\n`
+        response += `\n_For any queries, reply 5 to contact us_\n`
+        response += `_Reply 0 for menu_`
       } else {
-        response = `❌ Booking *${bookingIdInput}* not found.\n\nPlease check your Booking ID and try again.\n\n_Reply "menu" to go back_`
+        response = `❌ Booking ID *${bookingIdInput}* not found.\n\nPlease check your ID and try again.\n\n_Reply 0 for menu_`
       }
       newState = 'main_menu'
+      handled = true
     }
+
     // Default fallback - show menu for any unrecognized input
-    else {
-      response = `🤔 I didn't understand that.\n\n`
-      response += `_Reply "menu" to see available options_`
+    if (!handled) {
+      response = getMainMenuResponse()
       newState = 'main_menu'
     }
 

@@ -200,10 +200,12 @@ Deno.serve(async (req) => {
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       let numbersStored = 0
+      const allWabaIds: string[] = []
 
       // Extract phone numbers from all WABAs
       for (const business of wabaData.data || []) {
         for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+          allWabaIds.push(waba.id)
           for (const phone of waba.phone_numbers?.data || []) {
             // Store each phone number in the database
             const { error } = await supabase.from('whatsapp_numbers').upsert({
@@ -230,6 +232,30 @@ Deno.serve(async (req) => {
               numbersStored++
             }
           }
+        }
+      }
+
+      // CRITICAL: Update access token for ALL numbers under the same WABAs
+      // This ensures when user reconnects one number, all numbers from same FB account get updated
+      if (allWabaIds.length > 0) {
+        console.log(`[OAuth] Updating tokens for all numbers in WABAs: ${allWabaIds.join(', ')}`)
+        const { error: updateError, count } = await supabase
+          .from('whatsapp_numbers')
+          .update({ 
+            access_token: accessToken,
+            token_expires_at: expiresIn 
+              ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+              : null,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', stateData.user_id)
+          .in('waba_id', allWabaIds)
+        
+        if (updateError) {
+          console.error('[OAuth] Failed to update tokens for related numbers:', updateError)
+        } else {
+          console.log(`[OAuth] Updated tokens for ${count || 0} related numbers`)
         }
       }
 
@@ -378,10 +404,12 @@ Deno.serve(async (req) => {
         phone_number_id: string;
         quality_rating: string;
       }> = []
+      const allWabaIds: string[] = []
 
       // Extract phone numbers from all WABAs
       for (const business of wabaData.data || []) {
         for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+          allWabaIds.push(waba.id)
           for (const phone of waba.phone_numbers?.data || []) {
             // Store each phone number in the database
             const { error } = await supabase.from('whatsapp_numbers').upsert({
@@ -414,6 +442,28 @@ Deno.serve(async (req) => {
               quality_rating: phone.quality_rating,
             })
           }
+        }
+      }
+
+      // CRITICAL: Update access token for ALL numbers under the same WABAs
+      // This ensures when user reconnects one number, all numbers from same FB account get updated
+      if (allWabaIds.length > 0) {
+        console.log(`[OAuth] Updating tokens for all numbers in WABAs: ${allWabaIds.join(', ')}`)
+        const { error: updateError } = await supabase
+          .from('whatsapp_numbers')
+          .update({ 
+            access_token: accessToken,
+            token_expires_at: expiresIn 
+              ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+              : null,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', stateData.user_id)
+          .in('waba_id', allWabaIds)
+        
+        if (updateError) {
+          console.error('[OAuth] Failed to update tokens for related numbers:', updateError)
         }
       }
 

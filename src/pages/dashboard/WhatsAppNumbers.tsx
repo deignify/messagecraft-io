@@ -30,6 +30,9 @@ import {
   Clock,
   Loader2,
   Unlink,
+  Wifi,
+  WifiOff,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -142,6 +145,42 @@ export default function WhatsAppNumbers() {
     
     setUnlinking(true);
     try {
+      // Instead of deleting data, just mark the number as disconnected
+      // This preserves all chats, automations, contacts, and templates
+      const { error } = await supabase
+        .from('whatsapp_numbers')
+        .update({ 
+          status: 'disconnected',
+          access_token: '', // Clear the token for security
+        })
+        .eq('id', numberToUnlink.id);
+
+      if (error) throw error;
+
+      console.log('[WhatsApp] Number disconnected, data preserved:', {
+        numberId: numberToUnlink.id,
+        phoneNumber: numberToUnlink.phone_number,
+        status: 'disconnected'
+      });
+
+      toast.success(`Disconnected ${numberToUnlink.display_name || numberToUnlink.phone_number}. All data has been preserved.`);
+      await refreshNumbers();
+    } catch (err) {
+      console.error('[WhatsApp] Failed to disconnect number:', err);
+      toast.error('Failed to disconnect WhatsApp number. Please try again.');
+    } finally {
+      setUnlinking(false);
+      setUnlinkDialogOpen(false);
+      setNumberToUnlink(null);
+    }
+  };
+
+  // Permanent delete - only for already disconnected numbers
+  const handlePermanentDelete = async () => {
+    if (!numberToUnlink) return;
+    
+    setUnlinking(true);
+    try {
       // First get automation IDs for this WhatsApp number
       const { data: automations } = await supabase
         .from('automations')
@@ -168,6 +207,49 @@ export default function WhatsAppNumbers() {
           .eq('whatsapp_number_id', numberToUnlink.id);
       }
 
+      // Delete hotel-related data
+      const { data: hotels } = await supabase
+        .from('hotels')
+        .select('id')
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
+      if (hotels && hotels.length > 0) {
+        const hotelIds = hotels.map(h => h.id);
+        
+        await supabase
+          .from('hotel_bookings')
+          .delete()
+          .in('hotel_id', hotelIds);
+
+        await supabase
+          .from('hotel_offers')
+          .delete()
+          .in('hotel_id', hotelIds);
+
+        // Get room type IDs to delete photos
+        const { data: roomTypes } = await supabase
+          .from('room_types')
+          .select('id')
+          .in('hotel_id', hotelIds);
+
+        if (roomTypes && roomTypes.length > 0) {
+          await supabase
+            .from('room_photos')
+            .delete()
+            .in('room_type_id', roomTypes.map(r => r.id));
+        }
+
+        await supabase
+          .from('room_types')
+          .delete()
+          .in('hotel_id', hotelIds);
+
+        await supabase
+          .from('hotels')
+          .delete()
+          .eq('whatsapp_number_id', numberToUnlink.id);
+      }
+
       // Delete messages, conversations, contacts, templates
       await supabase
         .from('messages')
@@ -189,6 +271,11 @@ export default function WhatsAppNumbers() {
         .delete()
         .eq('whatsapp_number_id', numberToUnlink.id);
 
+      await supabase
+        .from('message_templates')
+        .delete()
+        .eq('whatsapp_number_id', numberToUnlink.id);
+
       // Finally delete the WhatsApp number itself
       const { error } = await supabase
         .from('whatsapp_numbers')
@@ -197,15 +284,85 @@ export default function WhatsAppNumbers() {
 
       if (error) throw error;
 
-      toast.success(`Successfully unlinked ${numberToUnlink.display_name || numberToUnlink.phone_number}`);
+      console.log('[WhatsApp] Number permanently deleted:', {
+        numberId: numberToUnlink.id,
+        phoneNumber: numberToUnlink.phone_number
+      });
+
+      toast.success(`Permanently removed ${numberToUnlink.display_name || numberToUnlink.phone_number}`);
       await refreshNumbers();
     } catch (err) {
-      console.error('Failed to unlink WhatsApp number:', err);
-      toast.error('Failed to unlink WhatsApp number. Please try again.');
+      console.error('[WhatsApp] Failed to permanently delete number:', err);
+      toast.error('Failed to remove WhatsApp number. Please try again.');
     } finally {
       setUnlinking(false);
       setUnlinkDialogOpen(false);
       setNumberToUnlink(null);
+    }
+  };
+
+  // Check connection status by testing the API
+  const checkConnectionStatus = async (number: WhatsAppNumber) => {
+    if (!number.access_token || number.status === 'disconnected') {
+      return { connected: false, reason: 'No access token or disconnected' };
+    }
+
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v21.0/${number.phone_number_id}`,
+        {
+          headers: { 'Authorization': `Bearer ${number.access_token}` }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.log('[WhatsApp] Connection check failed:', {
+          numberId: number.id,
+          error: data.error
+        });
+        
+        // Update status to error if API fails
+        await supabase
+          .from('whatsapp_numbers')
+          .update({ status: 'error' })
+          .eq('id', number.id);
+          
+        return { connected: false, reason: data.error?.message || 'API error' };
+      }
+
+      // Update status to active if API succeeds
+      if (number.status !== 'active') {
+        await supabase
+          .from('whatsapp_numbers')
+          .update({ status: 'active' })
+          .eq('id', number.id);
+      }
+
+      console.log('[WhatsApp] Connection verified:', {
+        numberId: number.id,
+        displayName: data.verified_name || data.display_phone_number
+      });
+
+      return { connected: true, data };
+    } catch (err) {
+      console.error('[WhatsApp] Connection check error:', err);
+      return { connected: false, reason: 'Network error' };
+    }
+  };
+
+  const handleVerifyConnection = async (e: React.MouseEvent, number: WhatsAppNumber) => {
+    e.stopPropagation();
+    toast.loading('Checking connection...', { id: 'verify-connection' });
+    
+    const result = await checkConnectionStatus(number);
+    await refreshNumbers();
+    
+    if (result.connected) {
+      toast.success('Connection verified successfully!', { id: 'verify-connection' });
+    } else {
+      toast.error(`Connection failed: ${result.reason}`, { id: 'verify-connection' });
     }
   };
 
@@ -352,13 +509,45 @@ export default function WhatsAppNumbers() {
                     )}
                   </div>
                   
+                  {/* Verify Connection Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-primary"
+                    onClick={(e) => handleVerifyConnection(e, number)}
+                    title="Verify connection"
+                  >
+                    <Wifi className="h-4 w-4" />
+                  </Button>
+                  
+                  {/* Reconnect Button - shows for disconnected numbers */}
+                  {number.status === 'disconnected' && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConnectDialogOpen(true);
+                      }}
+                      title="Reconnect this number"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                  )}
+                  
                   <Button
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleUnlinkClick(e, number)}
+                    title={number.status === 'disconnected' ? 'Remove number' : 'Disconnect number'}
                   >
-                    <Unlink className="h-4 w-4" />
+                    {number.status === 'disconnected' ? (
+                      <WifiOff className="h-4 w-4" />
+                    ) : (
+                      <Unlink className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               </div>
@@ -367,47 +556,85 @@ export default function WhatsAppNumbers() {
         </div>
       )}
 
-      {/* Unlink Confirmation Dialog */}
+      {/* Disconnect/Remove Confirmation Dialog */}
       <AlertDialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unlink WhatsApp Number?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {numberToUnlink?.status === 'disconnected' 
+                ? 'Permanently Remove Number?' 
+                : 'Disconnect WhatsApp Number?'}
+            </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>
-                Are you sure you want to unlink{' '}
-                <span className="font-semibold">
-                  {numberToUnlink?.display_name || numberToUnlink?.phone_number}
-                </span>
-                ?
+                {numberToUnlink?.status === 'disconnected' ? (
+                  <>
+                    Are you sure you want to permanently remove{' '}
+                    <span className="font-semibold">
+                      {numberToUnlink?.display_name || numberToUnlink?.phone_number}
+                    </span>
+                    ?
+                  </>
+                ) : (
+                  <>
+                    Disconnect{' '}
+                    <span className="font-semibold">
+                      {numberToUnlink?.display_name || numberToUnlink?.phone_number}
+                    </span>
+                    ?
+                  </>
+                )}
               </p>
-              <p className="text-destructive">
-                This will permanently delete all associated data including:
-              </p>
-              <ul className="list-disc list-inside text-sm text-muted-foreground">
-                <li>All conversations and messages</li>
-                <li>All contacts linked to this number</li>
-                <li>All message templates</li>
-                <li>All automations and their sessions</li>
-              </ul>
-              <p className="text-sm font-medium mt-2">
-                This action cannot be undone.
-              </p>
+              {numberToUnlink?.status === 'disconnected' ? (
+                <>
+                  <p className="text-destructive">
+                    This will permanently delete all associated data:
+                  </p>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground">
+                    <li>All conversations and messages</li>
+                    <li>All contacts linked to this number</li>
+                    <li>All message templates</li>
+                    <li>All automations and their sessions</li>
+                  </ul>
+                  <p className="text-sm font-medium mt-2">
+                    This action cannot be undone.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-primary font-medium">
+                    ✓ All your data will be preserved:
+                  </p>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground">
+                    <li>Conversations and messages will remain</li>
+                    <li>Contacts will be kept</li>
+                    <li>Templates will be saved</li>
+                    <li>Automations will be paused but preserved</li>
+                  </ul>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    You can reconnect this number anytime to restore full functionality.
+                  </p>
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={unlinking}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleUnlinkConfirm}
+              onClick={numberToUnlink?.status === 'disconnected' ? handlePermanentDelete : handleUnlinkConfirm}
               disabled={unlinking}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={numberToUnlink?.status === 'disconnected' 
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : ""
+              }
             >
               {unlinking ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Unlinking...
+                  {numberToUnlink?.status === 'disconnected' ? 'Removing...' : 'Disconnecting...'}
                 </>
               ) : (
-                'Unlink Account'
+                numberToUnlink?.status === 'disconnected' ? 'Remove Permanently' : 'Disconnect'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

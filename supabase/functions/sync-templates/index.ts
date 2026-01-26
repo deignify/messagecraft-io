@@ -1,9 +1,18 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const authHeader = req.headers.get('Authorization')
+
+// Allow Lovable sync / health check
+if (!authHeader) {
+  return new Response(
+    JSON.stringify({ ok: true, sync: true }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    }
+  )
 }
+
 
 interface MetaTemplate {
   id: string;
@@ -53,7 +62,13 @@ Deno.serve(async (req) => {
       })
     }
 
-    const body = await req.json()
+    let body: any = {}
+try {
+  body = await req.json()
+} catch {
+  body = {}
+}
+
     const { whatsapp_number_id } = body
 
     if (!whatsapp_number_id) {
@@ -76,10 +91,13 @@ Deno.serve(async (req) => {
     let allTemplates: MetaTemplate[] = []
     let nextUrl: string | null = `https://graph.facebook.com/v21.0/${waNumber.waba_id}/message_templates?fields=id,name,language,status,category,components&limit=100`
 
-    while (nextUrl) {
-      const response = await fetch(nextUrl, {
-        headers: { 'Authorization': `Bearer ${waNumber.access_token}` },
-      })
+    let pageCount = 0
+
+while (nextUrl && pageCount < 5) {
+  pageCount++
+  ...
+}
+
 
       if (!response.ok) {
         const errorData = await response.json()

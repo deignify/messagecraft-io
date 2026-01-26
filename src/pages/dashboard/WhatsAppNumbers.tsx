@@ -46,6 +46,7 @@ export default function WhatsAppNumbers() {
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
   const [numberToUnlink, setNumberToUnlink] = useState<WhatsAppNumber | null>(null);
   const [unlinking, setUnlinking] = useState(false);
+  const [syncingTokens, setSyncingTokens] = useState(false);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -362,7 +363,50 @@ export default function WhatsAppNumbers() {
     if (result.connected) {
       toast.success('Connection verified successfully!', { id: 'verify-connection' });
     } else {
-      toast.error(`Connection failed: ${result.reason}`, { id: 'verify-connection' });
+      toast.error(`Connection failed: ${result.reason}. Try "Sync All Tokens" to fix.`, { id: 'verify-connection' });
+    }
+  };
+
+  // Sync all tokens by re-authenticating with Meta
+  // This fixes the issue where connecting a new number invalidates tokens for existing numbers
+  const handleSyncAllTokens = async () => {
+    if (!session?.access_token) {
+      toast.error('Please log in to sync tokens');
+      return;
+    }
+
+    setSyncingTokens(true);
+    toast.loading('Syncing tokens with Meta...', { id: 'sync-tokens' });
+
+    try {
+      // Trigger the OAuth flow which will update tokens for ALL numbers from the same FB account
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
+      const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+      const returnUrl = `${window.location.origin}/dashboard/whatsapp-numbers`;
+
+      const res = await fetch(`${functionBaseUrl}?action=get-auth-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          redirect_uri: functionBaseUrl,
+          return_url: returnUrl,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.auth_url) {
+        throw new Error(data?.error || 'Failed to start token sync');
+      }
+
+      toast.dismiss('sync-tokens');
+      window.location.href = data.auth_url;
+    } catch (err) {
+      console.error('[WhatsApp] Token sync failed:', err);
+      toast.error('Failed to sync tokens. Please try again.', { id: 'sync-tokens' });
+      setSyncingTokens(false);
     }
   };
 
@@ -380,6 +424,18 @@ export default function WhatsAppNumbers() {
         </div>
         
         <div className="flex items-center gap-3">
+          {numbers.length > 0 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSyncAllTokens} 
+              disabled={syncingTokens || loading}
+              title="Re-authenticate with Meta to refresh tokens for all numbers from the same Facebook account"
+            >
+              <RefreshCw className={cn("h-4 w-4", syncingTokens && "animate-spin")} />
+              Sync All Tokens
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={refreshNumbers} disabled={loading}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             Refresh
@@ -424,6 +480,32 @@ export default function WhatsAppNumbers() {
           </Dialog>
         </div>
       </div>
+
+      {/* Alert for numbers with errors */}
+      {numbers.some(n => n.status === 'error') && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">
+              Some numbers have connection issues
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              This often happens when you connect multiple numbers from the same Facebook account. 
+              Click <strong>"Sync All Tokens"</strong> to re-authenticate and fix all numbers at once.
+            </p>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSyncAllTokens}
+            disabled={syncingTokens}
+            className="border-destructive/30 hover:bg-destructive/10"
+          >
+            <RefreshCw className={cn("h-4 w-4", syncingTokens && "animate-spin")} />
+            Fix Now
+          </Button>
+        </div>
+      )}
 
       {/* Numbers List */}
       {loading ? (

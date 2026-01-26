@@ -236,7 +236,8 @@ Deno.serve(async (req) => {
       }
 
       // CRITICAL: Update access token for ALL numbers under the same WABAs
-      // This ensures when user reconnects one number, all numbers from same FB account get updated
+      // This ensures when user reconnects, ALL numbers from same WABA get updated (regardless of app user_id)
+      // Meta tokens are shared at WABA level, not individual phone level
       if (allWabaIds.length > 0) {
         console.log(`[OAuth] Updating tokens for all numbers in WABAs: ${allWabaIds.join(', ')}`)
         const { error: updateError, count } = await supabase
@@ -249,7 +250,6 @@ Deno.serve(async (req) => {
             status: 'active',
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', stateData.user_id)
           .in('waba_id', allWabaIds)
         
         if (updateError) {
@@ -446,7 +446,8 @@ Deno.serve(async (req) => {
       }
 
       // CRITICAL: Update access token for ALL numbers under the same WABAs
-      // This ensures when user reconnects one number, all numbers from same FB account get updated
+      // This ensures when user reconnects, ALL numbers from same WABA get updated (regardless of app user_id)
+      // Meta tokens are shared at WABA level, not individual phone level
       if (allWabaIds.length > 0) {
         console.log(`[OAuth] Updating tokens for all numbers in WABAs: ${allWabaIds.join(', ')}`)
         const { error: updateError } = await supabase
@@ -459,7 +460,6 @@ Deno.serve(async (req) => {
             status: 'active',
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', stateData.user_id)
           .in('waba_id', allWabaIds)
         
         if (updateError) {

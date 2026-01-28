@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
+import { useSuperAdmin } from '@/hooks/useSuperAdmin';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -34,6 +35,7 @@ import {
   ChevronDown,
   Plus,
   Building2,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -62,6 +64,7 @@ export function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, profile, signOut } = useAuth();
   const { numbers, selectedNumber, selectNumber } = useWhatsApp();
+  const { isSuperAdmin } = useSuperAdmin();
   const location = useLocation();
 
   const initials = profile?.full_name
@@ -250,6 +253,14 @@ export function DashboardLayout() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {isSuperAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/superadmin" className="cursor-pointer">
+                      <Shield className="h-4 w-4 mr-2 text-destructive" />
+                      SuperAdmin Panel
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard/settings" className="cursor-pointer">
                     <Settings className="h-4 w-4 mr-2" />

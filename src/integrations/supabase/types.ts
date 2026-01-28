@@ -626,6 +626,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          status: string | null
           updated_at: string
         }
         Insert: {
@@ -635,6 +636,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          status?: string | null
           updated_at?: string
         }
         Update: {
@@ -644,6 +646,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          status?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -786,6 +789,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
           auto_assign: boolean | null
@@ -908,8 +932,16 @@ export type Database = {
     }
     Functions: {
       generate_booking_id: { Args: { hotel_name: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "superadmin" | "admin" | "user"
       automation_trigger: "first_message" | "keyword" | "always"
       booking_status:
         | "pending"
@@ -1070,6 +1102,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["superadmin", "admin", "user"],
       automation_trigger: ["first_message", "keyword", "always"],
       booking_status: [
         "pending",

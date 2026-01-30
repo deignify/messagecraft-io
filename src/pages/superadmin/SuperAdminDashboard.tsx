@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Smartphone, MessageSquare, Activity } from 'lucide-react';
+import { StatsCards } from '@/components/superadmin/StatsCards';
+import { AnalyticsCharts } from '@/components/superadmin/AnalyticsCharts';
+import { RecentActivity } from '@/components/superadmin/RecentActivity';
+import { Button } from '@/components/ui/button';
+import { RefreshCw } from 'lucide-react';
+import { startOfDay, subDays, endOfDay } from 'date-fns';
 
 interface Stats {
   totalUsers: number;
@@ -11,6 +15,8 @@ interface Stats {
   activeNumbers: number;
   totalConversations: number;
   totalMessages: number;
+  messagesToday: number;
+  messagesYesterday: number;
 }
 
 export default function SuperAdminDashboard() {
@@ -22,6 +28,8 @@ export default function SuperAdminDashboard() {
     activeNumbers: 0,
     totalConversations: 0,
     totalMessages: 0,
+    messagesToday: 0,
+    messagesYesterday: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -30,6 +38,7 @@ export default function SuperAdminDashboard() {
   }, []);
 
   const fetchStats = async () => {
+    setLoading(true);
     try {
       // Fetch users
       const { data: profiles, error: profilesError } = await supabase
@@ -52,12 +61,28 @@ export default function SuperAdminDashboard() {
 
       if (convError) throw convError;
 
-      // Fetch messages count
+      // Fetch total messages count
       const { count: msgCount, error: msgError } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true });
 
       if (msgError) throw msgError;
+
+      // Fetch today's messages
+      const today = new Date();
+      const { count: todayCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfDay(today).toISOString())
+        .lte('created_at', endOfDay(today).toISOString());
+
+      // Fetch yesterday's messages
+      const yesterday = subDays(today, 1);
+      const { count: yesterdayCount } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', startOfDay(yesterday).toISOString())
+        .lte('created_at', endOfDay(yesterday).toISOString());
 
       setStats({
         totalUsers: profiles?.length || 0,
@@ -67,6 +92,8 @@ export default function SuperAdminDashboard() {
         activeNumbers: numbers?.filter(n => n.status === 'active').length || 0,
         totalConversations: convCount || 0,
         totalMessages: msgCount || 0,
+        messagesToday: todayCount || 0,
+        messagesYesterday: yesterdayCount || 0,
       });
     } catch (error) {
       console.error('[SuperAdmin] Error fetching stats:', error);
@@ -75,61 +102,27 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const statCards = [
-    { 
-      title: 'Total Users', 
-      value: stats.totalUsers, 
-      icon: Users, 
-      color: 'text-blue-500',
-      subtitle: `${stats.activeUsers} active, ${stats.blockedUsers} blocked`
-    },
-    { 
-      title: 'WhatsApp Numbers', 
-      value: stats.totalNumbers, 
-      icon: Smartphone, 
-      color: 'text-green-500',
-      subtitle: `${stats.activeNumbers} connected`
-    },
-    { 
-      title: 'Total Conversations', 
-      value: stats.totalConversations, 
-      icon: MessageSquare, 
-      color: 'text-purple-500',
-      subtitle: 'Across all users'
-    },
-    { 
-      title: 'Total Messages', 
-      value: stats.totalMessages, 
-      icon: Activity, 
-      color: 'text-orange-500',
-      subtitle: 'All time'
-    },
-  ];
-
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">SuperAdmin Dashboard</h1>
-        <p className="text-muted-foreground">Manage all users and WhatsApp accounts</p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">SuperAdmin Dashboard</h1>
+          <p className="text-muted-foreground">Platform overview and analytics</p>
+        </div>
+        <Button onClick={fetchStats} variant="outline" size="sm" disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((card) => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {loading ? '...' : card.value.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <StatsCards stats={stats} loading={loading} />
+      
+      <AnalyticsCharts />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-3">
+          <RecentActivity />
+        </div>
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ import {
 import { NewMessageDialog } from '@/components/chat/NewMessageDialog';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Template } from '@/lib/supabase-types';
+import type { MessageTemplate, TemplateButton, TemplateVariables } from '@/lib/template-types';
 import { format, isToday, isYesterday, differenceInHours } from 'date-fns';
 import {
   Dialog,
@@ -60,6 +61,7 @@ export default function LiveChat() {
   // 24-hour window state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [customTemplates, setCustomTemplates] = useState<MessageTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   
   // New message dialog state
@@ -118,6 +120,7 @@ export default function LiveChat() {
     if (!selectedNumber || !user) return;
 
     const fetchTemplates = async () => {
+      // Fetch Meta templates
       const { data, error } = await supabase
         .from('templates')
         .select('*')
@@ -127,6 +130,23 @@ export default function LiveChat() {
 
       if (!error && data) {
         setTemplates(data as Template[]);
+      }
+
+      // Fetch custom templates
+      const { data: customData, error: customError } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('whatsapp_number_id', selectedNumber.id)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (!customError && customData) {
+        const transformedData: MessageTemplate[] = customData.map((item: any) => ({
+          ...item,
+          variables: (item.variables as TemplateVariables) || {},
+          buttons: (item.buttons as TemplateButton[]) || [],
+        }));
+        setCustomTemplates(transformedData);
       }
     };
 
@@ -851,6 +871,7 @@ export default function LiveChat() {
           whatsappNumberId={selectedNumber.id}
           userId={user.id}
           templates={templates}
+          customTemplates={customTemplates}
           onMessageSent={() => {
             // Refresh conversations after sending
           }}

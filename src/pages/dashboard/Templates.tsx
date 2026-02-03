@@ -283,28 +283,6 @@ export default function Templates() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Custom Templates Section */}
-          {allTemplates.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-semibold text-foreground">
-                Your Templates ({allTemplates.length})
-              </h2>
-              <div className="grid gap-4">
-                {allTemplates.map((template) => (
-                  <TemplateCard
-                    key={template.id}
-                    template={template}
-                    onEdit={handleEditTemplate}
-                    onDelete={deleteTemplate}
-                    onPreview={handlePreviewTemplate}
-                    onSubmitForReview={handleSubmitForReview}
-                    onSend={handleSendTemplate}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Meta Templates Section */}
           {filteredSyncedTemplates.length > 0 && (
             <div className="space-y-4">

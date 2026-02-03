@@ -80,10 +80,13 @@ Deno.serve(async (req) => {
     }
 
     // Build the message payload based on type
+    // Normalize phone number - remove non-digits and ensure consistent format
+    const normalizedPhone = to.replace(/\D/g, '');
+    
     let messagePayload: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: to.replace(/\D/g, ''), // Remove non-digits
+      to: normalizedPhone,
     }
 
     switch (message_type) {
@@ -176,7 +179,8 @@ Deno.serve(async (req) => {
 
     const waMessageId = (metaData as MetaMessageResponse).messages?.[0]?.id
 
-    // Find or create conversation
+    // Find or create conversation - check both normalized and original phone formats
+    // First try exact match with original
     let { data: conversation } = await supabase
       .from('conversations')
       .select('id')
@@ -185,13 +189,39 @@ Deno.serve(async (req) => {
       .eq('contact_phone', to)
       .maybeSingle()
 
+    // If not found, try with normalized phone (without +)
+    if (!conversation && to.startsWith('+')) {
+      const phoneWithoutPlus = to.replace(/^\+/, '');
+      const { data: normalizedConversation } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userData.user.id)
+        .eq('whatsapp_number_id', whatsapp_number_id)
+        .eq('contact_phone', phoneWithoutPlus)
+        .maybeSingle()
+      conversation = normalizedConversation
+    }
+
+    // Also try with + prefix if original didn't have it
+    if (!conversation && !to.startsWith('+')) {
+      const phoneWithPlus = '+' + to;
+      const { data: plusConversation } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userData.user.id)
+        .eq('whatsapp_number_id', whatsapp_number_id)
+        .eq('contact_phone', phoneWithPlus)
+        .maybeSingle()
+      conversation = plusConversation
+    }
+
     if (!conversation) {
       const { data: newConversation } = await supabase
         .from('conversations')
         .insert({
           user_id: userData.user.id,
           whatsapp_number_id: whatsapp_number_id,
-          contact_phone: to,
+          contact_phone: normalizedPhone, // Use normalized phone for consistency
           status: 'open',
           unread_count: 0,
           last_message_text: content || `[${message_type}]`,

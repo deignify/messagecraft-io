@@ -13,9 +13,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Send, FileText, MessageSquarePlus } from 'lucide-react';
+import { Loader2, Send, FileText, MessageSquarePlus, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Template } from '@/lib/supabase-types';
+import type { MessageTemplate } from '@/lib/template-types';
 import { z } from 'zod';
 
 const phoneSchema = z.string()
@@ -33,6 +34,7 @@ interface NewMessageDialogProps {
   whatsappNumberId: string;
   userId: string;
   templates: Template[];
+  customTemplates?: MessageTemplate[];
   onMessageSent?: () => void;
 }
 
@@ -42,6 +44,7 @@ export function NewMessageDialog({
   whatsappNumberId,
   userId,
   templates,
+  customTemplates = [],
   onMessageSent,
 }: NewMessageDialogProps) {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -49,8 +52,10 @@ export function NewMessageDialog({
   const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState<'text' | 'template'>('text');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedCustomTemplate, setSelectedCustomTemplate] = useState<MessageTemplate | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [messageError, setMessageError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -58,8 +63,10 @@ export function NewMessageDialog({
       setPhoneNumber('');
       setMessage('');
       setSelectedTemplate(null);
+      setSelectedCustomTemplate(null);
       setPhoneError(null);
       setMessageError(null);
+      setSendError(null);
     }
   }, [open]);
 
@@ -88,9 +95,10 @@ export function NewMessageDialog({
     if (!validatePhone(phoneNumber) || !validateMessage(message)) return;
     
     setSending(true);
+    setSendError(null);
     
     try {
-      const { error } = await supabase.functions.invoke('send-message', {
+      const { data, error } = await supabase.functions.invoke('send-message', {
         body: {
           whatsapp_number_id: whatsappNumberId,
           to: phoneNumber.trim(),
@@ -100,16 +108,23 @@ export function NewMessageDialog({
       });
 
       if (error) {
-        toast.error('Failed to send message');
+        const errorMessage = error.message || 'Failed to send message';
+        setSendError(errorMessage);
+        toast.error(errorMessage);
         console.error('Error sending message:', error);
+      } else if (data?.error) {
+        setSendError(data.error);
+        toast.error(data.error);
       } else {
         toast.success('Message sent successfully');
         onOpenChange(false);
         onMessageSent?.();
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to send message';
+      setSendError(errorMessage);
       console.error('Error sending message:', error);
-      toast.error('Failed to send message');
+      toast.error(errorMessage);
     } finally {
       setSending(false);
     }
@@ -117,35 +132,54 @@ export function NewMessageDialog({
 
   const handleSendTemplate = async () => {
     if (!validatePhone(phoneNumber)) return;
-    if (!selectedTemplate) {
+    
+    // Check if either a Meta template or custom template is selected
+    const templateToSend = selectedTemplate || selectedCustomTemplate;
+    if (!templateToSend) {
       toast.error('Please select a template');
       return;
     }
 
     setSending(true);
+    setSendError(null);
 
     try {
-      const { error } = await supabase.functions.invoke('send-message', {
+      // Determine template name and language based on type
+      const templateName = selectedTemplate 
+        ? selectedTemplate.name 
+        : selectedCustomTemplate!.template_name;
+      const templateLanguage = selectedTemplate 
+        ? selectedTemplate.language 
+        : selectedCustomTemplate!.language;
+
+      const { data, error } = await supabase.functions.invoke('send-message', {
         body: {
           whatsapp_number_id: whatsappNumberId,
           to: phoneNumber.trim(),
           message_type: 'template',
-          template_name: selectedTemplate.name,
-          template_language: selectedTemplate.language,
+          template_name: templateName,
+          template_language: templateLanguage,
         },
       });
 
       if (error) {
-        toast.error('Failed to send template');
+        const errorMessage = error.message || 'Failed to send template';
+        setSendError(errorMessage);
+        toast.error(errorMessage);
         console.error('Error sending template:', error);
+      } else if (data?.error) {
+        setSendError(data.error);
+        toast.error(data.error);
       } else {
         toast.success('Template sent successfully');
         onOpenChange(false);
         onMessageSent?.();
       }
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Failed to send template';
+      setSendError(errorMessage);
       console.error('Error sending template:', error);
-      toast.error('Failed to send template');
+      toast.error(errorMessage);
     } finally {
       setSending(false);
     }
@@ -160,6 +194,7 @@ export function NewMessageDialog({
   };
 
   const approvedTemplates = templates.filter(t => t.status === 'APPROVED');
+  const approvedCustomTemplates = customTemplates.filter(t => t.status === 'approved');
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,18 +263,23 @@ export function NewMessageDialog({
             <TabsContent value="template" className="flex-1 overflow-hidden mt-4">
               <Label>Select Template</Label>
               <ScrollArea className="h-[200px] mt-2 border border-border rounded-lg p-2">
-                {approvedTemplates.length === 0 ? (
+                {approvedTemplates.length === 0 && approvedCustomTemplates.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">No approved templates</p>
-                    <p className="text-xs mt-1">Sync templates from Meta first</p>
+                    <p className="text-xs mt-1">Create and submit templates to Meta for approval first</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
+                    {/* Meta Templates */}
                     {approvedTemplates.map((template) => (
                       <div
                         key={template.id}
-                        onClick={() => setSelectedTemplate(template)}
+                        onClick={() => {
+                          setSelectedTemplate(template);
+                          setSelectedCustomTemplate(null);
+                          setSendError(null);
+                        }}
                         className={`p-3 border rounded-lg cursor-pointer transition-colors ${
                           selectedTemplate?.id === template.id
                             ? 'border-primary bg-primary/5'
@@ -261,12 +301,50 @@ export function NewMessageDialog({
                         )}
                       </div>
                     ))}
+                    
+                    {/* Custom Approved Templates */}
+                    {approvedCustomTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        onClick={() => {
+                          setSelectedCustomTemplate(template);
+                          setSelectedTemplate(null);
+                          setSendError(null);
+                        }}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedCustomTemplate?.id === template.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-medium text-foreground text-sm">{template.template_name}</h4>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                            {template.language}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2">
+                          {template.body_text || 'No body text'}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 )}
               </ScrollArea>
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* Error Display */}
+        {sendError && (
+          <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium">Failed to send</p>
+              <p className="text-xs mt-0.5">{sendError}</p>
+            </div>
+          </div>
+        )}
 
         {/* Send Button */}
         <div className="pt-4 border-t border-border">
@@ -276,7 +354,7 @@ export function NewMessageDialog({
               sending ||
               !phoneNumber.trim() ||
               (activeTab === 'text' && !message.trim()) ||
-              (activeTab === 'template' && !selectedTemplate)
+              (activeTab === 'template' && !selectedTemplate && !selectedCustomTemplate)
             }
             className="w-full"
           >

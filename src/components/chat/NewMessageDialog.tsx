@@ -162,19 +162,23 @@ export function NewMessageDialog({
         },
       });
 
-      if (error) {
-        const errorMessage = error.message || 'Failed to send template';
+      const payload: any = data;
+      const errorMessage =
+        error?.message ||
+        payload?.error ||
+        (payload?.success === false ? 'Failed to send template' : null);
+
+      if (errorMessage) {
         setSendError(errorMessage);
         toast.error(errorMessage);
-        console.error('Error sending template:', error);
-      } else if (data?.error) {
-        setSendError(data.error);
-        toast.error(data.error);
-      } else {
-        toast.success('Template sent successfully');
-        onOpenChange(false);
-        onMessageSent?.();
+        if (error) console.error('Error sending template:', error);
+        return;
       }
+
+      // NOTE: WhatsApp can still fail delivery later (e.g. payment/eligibility). We'll reflect that via message status updates.
+      toast.success('Template submitted (delivery pending)');
+      onOpenChange(false);
+      onMessageSent?.();
     } catch (error: any) {
       const errorMessage = error?.message || 'Failed to send template';
       setSendError(errorMessage);

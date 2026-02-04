@@ -207,19 +207,33 @@ export default function LiveChat() {
 
     fetchMessages();
 
-    // Subscribe to new messages
+    // Subscribe to message inserts + status updates (delivery/read/failed)
     const channel = supabase
       .channel('messages-changes')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
           filter: `conversation_id=eq.${selectedConversation.id}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          if (payload.eventType === 'INSERT') {
+            setMessages((prev) => [...prev, payload.new as Message]);
+            return;
+          }
+
+          if (payload.eventType === 'UPDATE') {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === (payload.new as any).id ? (payload.new as Message) : m))
+            );
+            return;
+          }
+
+          if (payload.eventType === 'DELETE') {
+            setMessages((prev) => prev.filter((m) => m.id !== (payload.old as any).id));
+          }
         }
       )
       .subscribe();
@@ -339,7 +353,7 @@ export default function LiveChat() {
       }
 
       // Call edge function to send message
-      const { error } = await supabase.functions.invoke('send-message', {
+      const { data, error } = await supabase.functions.invoke('send-message', {
         body: {
           whatsapp_number_id: selectedNumber.id,
           to: selectedConversation.contact_phone,
@@ -351,9 +365,12 @@ export default function LiveChat() {
         },
       });
 
-      if (error) {
-        toast.error('Failed to send message');
-        console.error('Error sending message:', error);
+      const payload: any = data;
+      const errorMessage = error?.message || payload?.error;
+
+      if (errorMessage) {
+        toast.error(errorMessage);
+        if (error) console.error('Error sending message:', error);
       } else {
         setNewMessage('');
         clearSelectedFile();
@@ -375,7 +392,7 @@ export default function LiveChat() {
     setShowTemplateDialog(false);
 
     try {
-      const { error } = await supabase.functions.invoke('send-message', {
+      const { data, error } = await supabase.functions.invoke('send-message', {
         body: {
           whatsapp_number_id: selectedNumber.id,
           to: selectedConversation.contact_phone,
@@ -385,13 +402,18 @@ export default function LiveChat() {
         },
       });
 
-      if (error) {
-        toast.error('Failed to send template');
-        console.error('Error sending template:', error);
-      } else {
-        toast.success('Template sent successfully');
-        setNewMessage('');
+      const payload: any = data;
+      const errorMessage = error?.message || payload?.error;
+
+      if (errorMessage) {
+        toast.error(errorMessage);
+        if (error) console.error('Error sending template:', error);
+        return;
       }
+
+      // Delivery can still fail later; message status updates will reflect the real reason.
+      toast.success('Template submitted (delivery pending)');
+      setNewMessage('');
     } catch (error) {
       console.error('Error sending template:', error);
       toast.error('Failed to send template');
@@ -413,7 +435,7 @@ export default function LiveChat() {
     return format(date, 'MMM d');
   };
 
-  const getMessageStatusIcon = (status: string) => {
+  const getMessageStatusIcon = (status: string, errorMessage?: string | null) => {
     switch (status) {
       case 'sent':
         return <Check className="h-3 w-3 text-chat-time" />;
@@ -423,6 +445,12 @@ export default function LiveChat() {
         return <CheckCheck className="h-3 w-3 text-primary" />;
       case 'pending':
         return <Clock className="h-3 w-3 text-chat-time" />;
+      case 'failed':
+        return (
+          <span title={errorMessage || 'Failed'} className="inline-flex">
+            <AlertTriangle className="h-3 w-3 text-destructive" />
+          </span>
+        );
       default:
         return null;
     }
@@ -675,8 +703,14 @@ export default function LiveChat() {
                         <span className="text-[10px] text-chat-time">
                           {formatMessageTime(message.created_at)}
                         </span>
-                        {message.direction === 'outbound' && getMessageStatusIcon(message.status)}
+                        {message.direction === 'outbound' && getMessageStatusIcon(message.status, (message as any).error_message)}
                       </div>
+
+                      {message.direction === 'outbound' && message.status === 'failed' && (message as any).error_message && (
+                        <div className="mt-1 text-[11px] text-destructive text-right">
+                          {(message as any).error_message}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

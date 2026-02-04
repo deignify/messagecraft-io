@@ -174,7 +174,53 @@ Deno.serve(async (req) => {
 
     if (!metaResponse.ok) {
       console.error('Meta API error:', metaData)
-      throw new Error(metaData.error?.message || 'Failed to send message')
+      
+      // Parse Meta API error for user-friendly message
+      const errorCode = metaData.error?.code
+      const errorSubcode = metaData.error?.error_subcode
+      const errorMessage = metaData.error?.message || 'Failed to send message'
+      const errorType = metaData.error?.type
+      
+      let userFriendlyError = errorMessage
+      
+      // Map common Meta API errors to user-friendly messages
+      if (errorCode === 131026 || errorSubcode === 2388032) {
+        userFriendlyError = 'Message failed: Recipient phone number is not a valid WhatsApp account'
+      } else if (errorCode === 131047) {
+        userFriendlyError = 'Message failed: 24-hour messaging window expired. Use a template message'
+      } else if (errorCode === 131051) {
+        userFriendlyError = 'Template message failed: Template not found or not approved'
+      } else if (errorCode === 131053) {
+        userFriendlyError = 'Media upload failed: Unable to download media from URL'
+      } else if (errorCode === 131056) {
+        userFriendlyError = 'Business verification required: Complete business verification in Meta Business Suite'
+      } else if (errorCode === 131042) {
+        userFriendlyError = 'Payment issue: Business has reached message limits. Check billing in Meta Business Suite'
+      } else if (errorCode === 132000 || errorSubcode === 2494055) {
+        userFriendlyError = 'Template error: Template parameters do not match. Check variable count'
+      } else if (errorCode === 132001) {
+        userFriendlyError = 'Template error: Template does not exist or is not approved'
+      } else if (errorCode === 132005) {
+        userFriendlyError = 'Template error: Incorrect number of template parameters'
+      } else if (errorCode === 132007) {
+        userFriendlyError = 'Template error: Template format mismatch'
+      } else if (errorCode === 132012) {
+        userFriendlyError = 'Template paused: This template has been paused due to low quality'
+      } else if (errorCode === 132015 || errorCode === 132016) {
+        userFriendlyError = 'Template disabled: This template has been disabled'
+      } else if (errorCode === 130429) {
+        userFriendlyError = 'Rate limit exceeded: Too many messages sent. Please wait and try again'
+      } else if (errorCode === 136025) {
+        userFriendlyError = 'Payment required: Add a valid payment method in Meta Business Suite'
+      } else if (errorCode === 400 && errorType === 'OAuthException') {
+        userFriendlyError = 'Authentication error: Access token may have expired. Reconnect WhatsApp number'
+      } else if (errorCode === 190) {
+        userFriendlyError = 'Access token expired: Please reconnect your WhatsApp number'
+      } else if (errorCode === 100) {
+        userFriendlyError = 'Invalid request: ' + errorMessage
+      }
+      
+      throw new Error(userFriendlyError)
     }
 
     const waMessageId = (metaData as MetaMessageResponse).messages?.[0]?.id

@@ -108,7 +108,7 @@ export default function WhatsAppNumbers() {
     // Generate the Meta OAuth URL via an authenticated call (so the backend can embed user_id in state)
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
     const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
-    const returnUrl = `${window.location.origin}/dashboard/whatsapp-numbers`;
+    const returnUrl = `${window.location.origin}/dashboard/numbers`;
 
     try {
       const res = await fetch(`${functionBaseUrl}?action=get-auth-url`, {
@@ -382,7 +382,7 @@ export default function WhatsAppNumbers() {
       // Trigger the OAuth flow which will update tokens for ALL numbers from the same FB account
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
       const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
-      const returnUrl = `${window.location.origin}/dashboard/whatsapp-numbers`;
+      const returnUrl = `${window.location.origin}/dashboard/numbers`;
 
       const res = await fetch(`${functionBaseUrl}?action=get-auth-url`, {
         method: 'POST',

@@ -21,6 +21,7 @@ import Contacts from "./pages/dashboard/Contacts";
 import Templates from "./pages/dashboard/Templates";
 import Automation from "./pages/dashboard/Automation";
 import HotelAutomation from "./pages/dashboard/HotelAutomation";
+import TeamManagement from "./pages/dashboard/TeamManagement";
 import SettingsPage from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -80,6 +81,7 @@ const App = () => (
                 <Route path="templates" element={<Templates />} />
                 <Route path="automation" element={<Automation />} />
                 <Route path="automation/hotel" element={<HotelAutomation />} />
+                <Route path="team" element={<TeamManagement />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
 

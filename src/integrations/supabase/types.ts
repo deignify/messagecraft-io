@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_metrics: {
+        Row: {
+          agent_id: string
+          conversations_handled: number | null
+          conversations_resolved: number | null
+          created_at: string
+          date: string
+          first_response_count: number | null
+          first_response_time_seconds: number | null
+          id: string
+          messages_received: number | null
+          messages_sent: number | null
+          response_count: number | null
+          total_response_time_seconds: number | null
+          updated_at: string
+          workspace_owner_id: string
+        }
+        Insert: {
+          agent_id: string
+          conversations_handled?: number | null
+          conversations_resolved?: number | null
+          created_at?: string
+          date?: string
+          first_response_count?: number | null
+          first_response_time_seconds?: number | null
+          id?: string
+          messages_received?: number | null
+          messages_sent?: number | null
+          response_count?: number | null
+          total_response_time_seconds?: number | null
+          updated_at?: string
+          workspace_owner_id: string
+        }
+        Update: {
+          agent_id?: string
+          conversations_handled?: number | null
+          conversations_resolved?: number | null
+          created_at?: string
+          date?: string
+          first_response_count?: number | null
+          first_response_time_seconds?: number | null
+          id?: string
+          messages_received?: number | null
+          messages_sent?: number | null
+          response_count?: number | null
+          total_response_time_seconds?: number | null
+          updated_at?: string
+          workspace_owner_id?: string
+        }
+        Relationships: []
+      }
       automation_sessions: {
         Row: {
           automation_id: string
@@ -159,6 +210,44 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          assigned_to: string
+          conversation_id: string
+          id: string
+          is_active: boolean | null
+          unassigned_at: string | null
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          assigned_to: string
+          conversation_id: string
+          id?: string
+          is_active?: boolean | null
+          unassigned_at?: string | null
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          assigned_to?: string
+          conversation_id?: string
+          id?: string
+          is_active?: boolean | null
+          unassigned_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_assignments_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -472,6 +561,41 @@ export type Database = {
           },
         ]
       }
+      internal_notes: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "internal_notes_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_templates: {
         Row: {
           body_text: string
@@ -739,6 +863,69 @@ export type Database = {
           },
         ]
       }
+      team_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          role: Database["public"]["Enums"]["team_role"]
+          token: string
+          workspace_owner_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          token?: string
+          workspace_owner_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          token?: string
+          workspace_owner_id?: string
+        }
+        Relationships: []
+      }
+      team_members: {
+        Row: {
+          created_at: string
+          id: string
+          is_available: boolean | null
+          role: Database["public"]["Enums"]["team_role"]
+          updated_at: string
+          user_id: string
+          workspace_owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_available?: boolean | null
+          role?: Database["public"]["Enums"]["team_role"]
+          updated_at?: string
+          user_id: string
+          workspace_owner_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_available?: boolean | null
+          role?: Database["public"]["Enums"]["team_role"]
+          updated_at?: string
+          user_id?: string
+          workspace_owner_id?: string
+        }
+        Relationships: []
+      }
       templates: {
         Row: {
           category: Database["public"]["Enums"]["template_category"]
@@ -813,6 +1000,7 @@ export type Database = {
       user_settings: {
         Row: {
           auto_assign: boolean | null
+          auto_assign_enabled: boolean | null
           created_at: string
           id: string
           notification_sound: boolean | null
@@ -822,6 +1010,7 @@ export type Database = {
         }
         Insert: {
           auto_assign?: boolean | null
+          auto_assign_enabled?: boolean | null
           created_at?: string
           id: string
           notification_sound?: boolean | null
@@ -831,6 +1020,7 @@ export type Database = {
         }
         Update: {
           auto_assign?: boolean | null
+          auto_assign_enabled?: boolean | null
           created_at?: string
           id?: string
           notification_sound?: boolean | null
@@ -932,11 +1122,19 @@ export type Database = {
     }
     Functions: {
       generate_booking_id: { Args: { hotel_name: string }; Returns: string }
+      get_team_role: {
+        Args: { _user_id: string; _workspace_owner_id: string }
+        Returns: Database["public"]["Enums"]["team_role"]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_team_member: {
+        Args: { _user_id: string; _workspace_owner_id: string }
         Returns: boolean
       }
     }
@@ -965,6 +1163,7 @@ export type Database = {
         | "location"
         | "sticker"
       step_type: "message" | "menu" | "condition" | "delay" | "assign"
+      team_role: "admin" | "manager" | "agent"
       template_category: "AUTHENTICATION" | "MARKETING" | "UTILITY"
       template_header_type: "none" | "text" | "image" | "video" | "document"
       template_status:
@@ -1128,6 +1327,7 @@ export const Constants = {
         "sticker",
       ],
       step_type: ["message", "menu", "condition", "delay", "assign"],
+      team_role: ["admin", "manager", "agent"],
       template_category: ["AUTHENTICATION", "MARKETING", "UTILITY"],
       template_header_type: ["none", "text", "image", "video", "document"],
       template_status: [

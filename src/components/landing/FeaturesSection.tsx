@@ -7,6 +7,7 @@ import {
   BarChart3,
   Clock,
   Globe,
+  UserCog,
 } from 'lucide-react';
 
 const features = [
@@ -19,6 +20,11 @@ const features = [
     icon: Zap,
     title: 'Smart Automation',
     description: 'Create automated workflows for common queries. Set up keyword triggers and menu-based responses.',
+  },
+  {
+    icon: UserCog,
+    title: 'Advanced Team Management',
+    description: 'Assign chats, track agent performance, and collaborate efficiently with Admin, Manager & Agent roles.',
   },
   {
     icon: Users,
@@ -37,8 +43,8 @@ const features = [
   },
   {
     icon: BarChart3,
-    title: 'Analytics',
-    description: 'Track message delivery, response times, and engagement. Make data-driven decisions.',
+    title: 'Analytics & Performance',
+    description: 'Track response times, resolution rates, and agent performance. Make data-driven decisions.',
   },
   {
     icon: Clock,

@@ -36,6 +36,7 @@ import {
   Plus,
   Building2,
   Shield,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,7 @@ const navItems = [
   { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
   { icon: FileText, label: 'Templates', path: '/dashboard/templates' },
   { icon: Building2, label: 'Automation', path: '/dashboard/automation' },
+  { icon: UsersRound, label: 'Team', path: '/dashboard/team' },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
 ];
 

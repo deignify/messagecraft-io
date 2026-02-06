@@ -118,7 +118,8 @@ export default function TeamManagement() {
                 <TeamMemberCard
                   key={member.id}
                   member={member}
-                  isOwner={member.user_id === user?.id}
+                  isOwner={member.user_id === user?.id && !member.id.startsWith('owner-')}
+                  isWorkspaceOwnerMember={member.id.startsWith('owner-')}
                   onUpdateRole={updateMemberRole}
                   onRemove={removeMember}
                   onToggleAvailability={toggleAvailability}

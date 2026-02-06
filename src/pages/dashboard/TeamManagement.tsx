@@ -29,6 +29,7 @@ export default function TeamManagement() {
     members,
     invitations,
     loading,
+    isWorkspaceOwner,
     refetch,
     inviteMember,
     cancelInvitation,
@@ -62,10 +63,12 @@ export default function TeamManagement() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
-          <Button onClick={() => setInviteDialogOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
-            Invite Member
-          </Button>
+          {isWorkspaceOwner && (
+            <Button onClick={() => setInviteDialogOpen(true)}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Invite Member
+            </Button>
+          )}
         </div>
       </div>
 
@@ -76,21 +79,25 @@ export default function TeamManagement() {
             Team Members
             <Badge variant="secondary">{members.length}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="invitations" className="gap-2">
-            <Mail className="h-4 w-4" />
-            Invitations
-            {invitations.length > 0 && (
-              <Badge variant="secondary">{invitations.length}</Badge>
-            )}
-          </TabsTrigger>
+          {isWorkspaceOwner && (
+            <TabsTrigger value="invitations" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Invitations
+              {invitations.length > 0 && (
+                <Badge variant="secondary">{invitations.length}</Badge>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="performance" className="gap-2">
             <TrendingUp className="h-4 w-4" />
             Performance
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            Settings
-          </TabsTrigger>
+          {isWorkspaceOwner && (
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              Settings
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="members">
@@ -120,6 +127,7 @@ export default function TeamManagement() {
                   member={member}
                   isOwner={member.user_id === user?.id && !member.id.startsWith('owner-')}
                   isWorkspaceOwnerMember={member.id.startsWith('owner-')}
+                  canManageTeam={isWorkspaceOwner}
                   onUpdateRole={updateMemberRole}
                   onRemove={removeMember}
                   onToggleAvailability={toggleAvailability}

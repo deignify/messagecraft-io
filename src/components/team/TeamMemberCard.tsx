@@ -23,6 +23,7 @@ import {
 interface TeamMemberCardProps {
   member: TeamMember;
   isOwner?: boolean;
+  isWorkspaceOwnerMember?: boolean; // If this member is the workspace owner itself
   onUpdateRole: (memberId: string, role: TeamRole) => void;
   onRemove: (memberId: string) => void;
   onToggleAvailability: (memberId: string, available: boolean) => void;
@@ -43,6 +44,7 @@ const roleBadgeVariants: Record<TeamRole, string> = {
 export function TeamMemberCard({ 
   member, 
   isOwner,
+  isWorkspaceOwnerMember,
   onUpdateRole, 
   onRemove, 
   onToggleAvailability 
@@ -53,6 +55,9 @@ export function TeamMemberCard({
     .map(n => n[0])
     .join('')
     .toUpperCase() || member.profile?.email?.[0]?.toUpperCase() || '?';
+
+  // Check if this is a virtual owner entry (ID starts with 'owner-')
+  const isVirtualOwner = member.id.startsWith('owner-');
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -73,7 +78,7 @@ export function TeamMemberCard({
             </div>
           </div>
           
-          {!isOwner && (
+          {!isOwner && !isVirtualOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -113,6 +118,10 @@ export function TeamMemberCard({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          
+          {isVirtualOwner && (
+            <Badge variant="outline" className="text-xs">Owner</Badge>
+          )}
         </div>
 
         <div className="mt-4 flex items-center justify-between">
@@ -121,15 +130,17 @@ export function TeamMemberCard({
             {ROLE_LABELS[member.role]}
           </Badge>
           
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {member.is_available ? 'Available' : 'Unavailable'}
-            </span>
-            <Switch
-              checked={member.is_available}
-              onCheckedChange={(checked) => onToggleAvailability(member.id, checked)}
-            />
-          </div>
+          {!isVirtualOwner && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {member.is_available ? 'Available' : 'Unavailable'}
+              </span>
+              <Switch
+                checked={member.is_available}
+                onCheckedChange={(checked) => onToggleAvailability(member.id, checked)}
+              />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

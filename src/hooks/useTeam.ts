@@ -31,7 +31,31 @@ export function useTeam() {
 
       if (membersError) throw membersError;
 
-      // Fetch profiles for members
+      // Build members list - include workspace owner as virtual admin
+      const allMembers: TeamMember[] = [];
+      
+      // Get the workspace owner's profile
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url')
+        .eq('id', user.id)
+        .single();
+
+      // Add workspace owner as virtual "admin" member (always first)
+      if (ownerProfile) {
+        allMembers.push({
+          id: `owner-${user.id}`,
+          workspace_owner_id: user.id,
+          user_id: user.id,
+          role: 'admin' as TeamRole,
+          is_available: true,
+          created_at: '',
+          updated_at: '',
+          profile: ownerProfile,
+        });
+      }
+
+      // Fetch profiles for team members
       if (membersData && membersData.length > 0) {
         const userIds = membersData.map(m => m.user_id);
         const { data: profiles } = await supabase
@@ -41,16 +65,19 @@ export function useTeam() {
 
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
         
-        const membersWithProfiles = membersData.map(m => ({
-          ...m,
-          role: m.role as TeamRole,
-          profile: profileMap.get(m.user_id) || undefined,
-        }));
-        
-        setMembers(membersWithProfiles);
-      } else {
-        setMembers([]);
+        membersData.forEach(m => {
+          // Skip if this is the workspace owner (already added above)
+          if (m.user_id !== user.id) {
+            allMembers.push({
+              ...m,
+              role: m.role as TeamRole,
+              profile: profileMap.get(m.user_id) || undefined,
+            });
+          }
+        });
       }
+        
+      setMembers(allMembers);
 
       // Fetch pending invitations
       const { data: invitationsData, error: invitationsError } = await supabase

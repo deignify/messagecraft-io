@@ -24,6 +24,7 @@ interface TeamMemberCardProps {
   member: TeamMember;
   isOwner?: boolean;
   isWorkspaceOwnerMember?: boolean; // If this member is the workspace owner itself
+  canManageTeam?: boolean; // If the current user can manage team members (is workspace owner)
   onUpdateRole: (memberId: string, role: TeamRole) => void;
   onRemove: (memberId: string) => void;
   onToggleAvailability: (memberId: string, available: boolean) => void;
@@ -45,6 +46,7 @@ export function TeamMemberCard({
   member, 
   isOwner,
   isWorkspaceOwnerMember,
+  canManageTeam = false,
   onUpdateRole, 
   onRemove, 
   onToggleAvailability 
@@ -78,7 +80,7 @@ export function TeamMemberCard({
             </div>
           </div>
           
-          {!isOwner && !isVirtualOwner && (
+          {canManageTeam && !isOwner && !isVirtualOwner && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">

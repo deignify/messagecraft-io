@@ -17,17 +17,31 @@ export function useTeam() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workspaceOwnerId, setWorkspaceOwnerId] = useState<string | null>(null);
+  const [isWorkspaceOwner, setIsWorkspaceOwner] = useState(false);
 
   const fetchTeamData = useCallback(async () => {
     if (!user) return;
     
     setLoading(true);
     try {
-      // Fetch team members
+      // First check if the user is a team member of another workspace
+      const { data: myMembership } = await supabase
+        .from('team_members')
+        .select('workspace_owner_id, role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      // Determine the workspace owner ID
+      const effectiveWorkspaceOwnerId = myMembership?.workspace_owner_id || user.id;
+      setWorkspaceOwnerId(effectiveWorkspaceOwnerId);
+      setIsWorkspaceOwner(effectiveWorkspaceOwnerId === user.id);
+
+      // Fetch team members for this workspace
       const { data: membersData, error: membersError } = await supabase
         .from('team_members')
         .select('*')
-        .eq('workspace_owner_id', user.id);
+        .eq('workspace_owner_id', effectiveWorkspaceOwnerId);
 
       if (membersError) throw membersError;
 
@@ -38,15 +52,15 @@ export function useTeam() {
       const { data: ownerProfile } = await supabase
         .from('profiles')
         .select('id, email, full_name, avatar_url')
-        .eq('id', user.id)
+        .eq('id', effectiveWorkspaceOwnerId)
         .single();
 
       // Add workspace owner as virtual "admin" member (always first)
       if (ownerProfile) {
         allMembers.push({
-          id: `owner-${user.id}`,
-          workspace_owner_id: user.id,
-          user_id: user.id,
+          id: `owner-${effectiveWorkspaceOwnerId}`,
+          workspace_owner_id: effectiveWorkspaceOwnerId,
+          user_id: effectiveWorkspaceOwnerId,
           role: 'admin' as TeamRole,
           is_available: true,
           created_at: '',
@@ -67,7 +81,7 @@ export function useTeam() {
         
         membersData.forEach(m => {
           // Skip if this is the workspace owner (already added above)
-          if (m.user_id !== user.id) {
+          if (m.user_id !== effectiveWorkspaceOwnerId) {
             allMembers.push({
               ...m,
               role: m.role as TeamRole,
@@ -79,19 +93,23 @@ export function useTeam() {
         
       setMembers(allMembers);
 
-      // Fetch pending invitations
-      const { data: invitationsData, error: invitationsError } = await supabase
-        .from('team_invitations')
-        .select('*')
-        .eq('workspace_owner_id', user.id)
-        .is('accepted_at', null)
-        .gt('expires_at', new Date().toISOString());
+      // Fetch pending invitations (only for workspace owner)
+      if (effectiveWorkspaceOwnerId === user.id) {
+        const { data: invitationsData, error: invitationsError } = await supabase
+          .from('team_invitations')
+          .select('*')
+          .eq('workspace_owner_id', user.id)
+          .is('accepted_at', null)
+          .gt('expires_at', new Date().toISOString());
 
-      if (invitationsError) throw invitationsError;
-      setInvitations((invitationsData || []).map(inv => ({
-        ...inv,
-        role: inv.role as TeamRole,
-      })));
+        if (invitationsError) throw invitationsError;
+        setInvitations((invitationsData || []).map(inv => ({
+          ...inv,
+          role: inv.role as TeamRole,
+        })));
+      } else {
+        setInvitations([]);
+      }
 
     } catch (error) {
       console.error('Error fetching team data:', error);
@@ -206,6 +224,8 @@ export function useTeam() {
     members,
     invitations,
     loading,
+    workspaceOwnerId,
+    isWorkspaceOwner,
     refetch: fetchTeamData,
     inviteMember,
     cancelInvitation,

@@ -28,10 +28,21 @@ export function WhatsAppProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // First check if the user is a team member of another workspace
+      const { data: myMembership } = await supabase
+        .from('team_members')
+        .select('workspace_owner_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const effectiveOwnerId = myMembership?.workspace_owner_id || user.id;
+
+      // Fetch numbers for the effective workspace owner
+      // RLS already allows team members to view workspace numbers
       const { data, error } = await supabase
         .from('whatsapp_numbers')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveOwnerId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

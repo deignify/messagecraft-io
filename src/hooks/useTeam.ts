@@ -16,6 +16,7 @@ export function useTeam() {
   const { user } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
+  const [receivedInvitations, setReceivedInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [workspaceOwnerId, setWorkspaceOwnerId] = useState<string | null>(null);
   const [isWorkspaceOwner, setIsWorkspaceOwner] = useState(false);
@@ -93,7 +94,7 @@ export function useTeam() {
         
       setMembers(allMembers);
 
-      // Fetch pending invitations (only for workspace owner)
+      // Fetch pending invitations sent by the workspace owner
       if (effectiveWorkspaceOwnerId === user.id) {
         const { data: invitationsData, error: invitationsError } = await supabase
           .from('team_invitations')
@@ -110,6 +111,19 @@ export function useTeam() {
       } else {
         setInvitations([]);
       }
+
+      // Fetch invitations received by the current user (by email)
+      const { data: receivedData } = await supabase
+        .from('team_invitations')
+        .select('*')
+        .eq('email', user.email!)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString());
+
+      setReceivedInvitations((receivedData || []).map(inv => ({
+        ...inv,
+        role: inv.role as TeamRole,
+      })));
 
     } catch (error) {
       console.error('Error fetching team data:', error);
@@ -163,6 +177,71 @@ export function useTeam() {
     } catch (error) {
       console.error('Error cancelling invitation:', error);
       toast.error('Failed to cancel invitation');
+    }
+  };
+
+  const acceptInvitation = async (invitationId: string) => {
+    if (!user) return;
+
+    try {
+      // Find the invitation
+      const invitation = receivedInvitations.find(i => i.id === invitationId);
+      if (!invitation) {
+        toast.error('Invitation not found');
+        return;
+      }
+
+      // Add user as team member
+      const { error: memberError } = await supabase
+        .from('team_members')
+        .insert({
+          workspace_owner_id: invitation.workspace_owner_id,
+          user_id: user.id,
+          role: invitation.role,
+        });
+
+      if (memberError) throw memberError;
+
+      // Mark invitation as accepted
+      const { error: updateError } = await supabase
+        .from('team_invitations')
+        .update({ accepted_at: new Date().toISOString() })
+        .eq('id', invitationId);
+
+      if (updateError) throw updateError;
+
+      setReceivedInvitations(prev => prev.filter(i => i.id !== invitationId));
+      toast.success('Invitation accepted! You are now a team member.');
+      
+      // Refresh to load workspace data
+      await fetchTeamData();
+    } catch (error: any) {
+      console.error('Error accepting invitation:', error);
+      if (error.message?.includes('duplicate')) {
+        toast.error('You are already a member of this workspace');
+      } else {
+        toast.error('Failed to accept invitation');
+      }
+    }
+  };
+
+  const declineInvitation = async (invitationId: string) => {
+    try {
+      // Just remove from the received list (don't delete - owner should still see it)
+      // Mark as declined by setting accepted_at to a special value or just filtering
+      const { error } = await supabase
+        .from('team_invitations')
+        .delete()
+        .eq('id', invitationId)
+        .eq('email', user?.email!);
+
+      if (error) throw error;
+
+      setReceivedInvitations(prev => prev.filter(i => i.id !== invitationId));
+      toast.success('Invitation declined');
+    } catch (error) {
+      console.error('Error declining invitation:', error);
+      toast.error('Failed to decline invitation');
     }
   };
 
@@ -223,12 +302,15 @@ export function useTeam() {
   return {
     members,
     invitations,
+    receivedInvitations,
     loading,
     workspaceOwnerId,
     isWorkspaceOwner,
     refetch: fetchTeamData,
     inviteMember,
     cancelInvitation,
+    acceptInvitation,
+    declineInvitation,
     updateMemberRole,
     removeMember,
     toggleAvailability,

@@ -28,11 +28,14 @@ export default function TeamManagement() {
   const {
     members,
     invitations,
+    receivedInvitations,
     loading,
     isWorkspaceOwner,
     refetch,
     inviteMember,
     cancelInvitation,
+    acceptInvitation,
+    declineInvitation,
     updateMemberRole,
     removeMember,
     toggleAvailability,
@@ -45,6 +48,9 @@ export default function TeamManagement() {
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
+
+  const hasReceivedInvitations = receivedInvitations.length > 0;
+  const showInvitationsTab = isWorkspaceOwner || hasReceivedInvitations;
 
   return (
     <div className="p-6 space-y-6">
@@ -79,12 +85,12 @@ export default function TeamManagement() {
             Team Members
             <Badge variant="secondary">{members.length}</Badge>
           </TabsTrigger>
-          {isWorkspaceOwner && (
+          {showInvitationsTab && (
             <TabsTrigger value="invitations" className="gap-2">
               <Mail className="h-4 w-4" />
               Invitations
-              {invitations.length > 0 && (
-                <Badge variant="secondary">{invitations.length}</Badge>
+              {(invitations.length + receivedInvitations.length) > 0 && (
+                <Badge variant="secondary">{invitations.length + receivedInvitations.length}</Badge>
               )}
             </TabsTrigger>
           )}
@@ -138,54 +144,123 @@ export default function TeamManagement() {
         </TabsContent>
 
         <TabsContent value="invitations">
-          {invitations.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Mail className="h-12 w-12 mx-auto text-muted-foreground/50" />
-                <h3 className="mt-4 text-lg font-semibold">No Pending Invitations</h3>
-                <p className="text-muted-foreground mt-1">
-                  All your team invitations have been accepted or expired
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
+          {/* Received invitations - shown to invited users */}
+          {receivedInvitations.length > 0 && (
+            <Card className="mb-4">
               <CardHeader>
-                <CardTitle>Pending Invitations</CardTitle>
+                <CardTitle>Invitations For You</CardTitle>
                 <CardDescription>
-                  Invitations that haven't been accepted yet
+                  You've been invited to join a team workspace
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {invitations.map((invitation) => (
+                  {receivedInvitations.map((invitation) => (
                     <div
                       key={invitation.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-4 border rounded-lg bg-primary/5"
                     >
                       <div className="flex items-center gap-3">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
+                        <UserPlus className="h-5 w-5 text-primary" />
                         <div>
-                          <div className="font-medium">{invitation.email}</div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <div className="font-medium">Team Invitation</div>
+                          <div className="text-sm text-muted-foreground">
+                            Role: <Badge variant="outline" className="ml-1">{invitation.role}</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                             <Clock className="h-3 w-3" />
                             Expires {format(new Date(invitation.expires_at), 'MMM d, yyyy')}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline">{invitation.role}</Badge>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          onClick={() => cancelInvitation(invitation.id)}
+                          onClick={() => declineInvitation(invitation.id)}
                         >
-                          <XCircle className="h-4 w-4 text-destructive" />
+                          Decline
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => acceptInvitation(invitation.id)}
+                        >
+                          Accept
                         </Button>
                       </div>
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sent invitations - shown to workspace owners */}
+          {isWorkspaceOwner && (
+            <>
+              {invitations.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Mail className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                    <h3 className="mt-4 text-lg font-semibold">No Pending Invitations</h3>
+                    <p className="text-muted-foreground mt-1">
+                      All your team invitations have been accepted or expired
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Sent Invitations</CardTitle>
+                    <CardDescription>
+                      Invitations that haven't been accepted yet
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {invitations.map((invitation) => (
+                        <div
+                          key={invitation.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Mail className="h-5 w-5 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{invitation.email}</div>
+                              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                Expires {format(new Date(invitation.expires_at), 'MMM d, yyyy')}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{invitation.role}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => cancelInvitation(invitation.id)}
+                            >
+                              <XCircle className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* Non-owners with no received invitations */}
+          {!isWorkspaceOwner && receivedInvitations.length === 0 && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Mail className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                <h3 className="mt-4 text-lg font-semibold">No Pending Invitations</h3>
+                <p className="text-muted-foreground mt-1">
+                  You don't have any pending team invitations
+                </p>
               </CardContent>
             </Card>
           )}

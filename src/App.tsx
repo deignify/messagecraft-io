@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { WhatsAppProvider } from "@/contexts/WhatsAppContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { SuperAdminRoute } from "@/components/auth/SuperAdminRoute";
+import { RoleGuard } from "@/components/auth/RoleGuard";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SuperAdminLayout } from "@/components/layout/SuperAdminLayout";
 
@@ -74,15 +75,15 @@ const App = () => (
                   <DashboardLayout />
                 </ProtectedRoute>
               }>
-                <Route index element={<DashboardHome />} />
-                <Route path="numbers" element={<WhatsAppNumbers />} />
+                <Route index element={<RoleGuard allowedRoles={['admin', 'manager']}><DashboardHome /></RoleGuard>} />
+                <Route path="numbers" element={<RoleGuard allowedRoles={['admin']}><WhatsAppNumbers /></RoleGuard>} />
                 <Route path="chat" element={<LiveChat />} />
-                <Route path="contacts" element={<Contacts />} />
-                <Route path="templates" element={<Templates />} />
-                <Route path="automation" element={<Automation />} />
-                <Route path="automation/hotel" element={<HotelAutomation />} />
-                <Route path="team" element={<TeamManagement />} />
-                <Route path="settings" element={<SettingsPage />} />
+                <Route path="contacts" element={<RoleGuard allowedRoles={['admin', 'manager']}><Contacts /></RoleGuard>} />
+                <Route path="templates" element={<RoleGuard allowedRoles={['admin', 'manager']}><Templates /></RoleGuard>} />
+                <Route path="automation" element={<RoleGuard allowedRoles={['admin']}><Automation /></RoleGuard>} />
+                <Route path="automation/hotel" element={<RoleGuard allowedRoles={['admin']}><HotelAutomation /></RoleGuard>} />
+                <Route path="team" element={<RoleGuard allowedRoles={['admin', 'manager']}><TeamManagement /></RoleGuard>} />
+                <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'manager']}><SettingsPage /></RoleGuard>} />
               </Route>
 
               {/* SuperAdmin routes */}

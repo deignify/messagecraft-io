@@ -3,6 +3,8 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
 import { useSuperAdmin } from '@/hooks/useSuperAdmin';
+import { useTeamRole } from '@/hooks/useTeamRole';
+import { TeamRole } from '@/lib/team-types';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -40,25 +42,33 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Mobile bottom nav items
-const mobileNavItems = [
-  { icon: LayoutDashboard, label: 'Home', path: '/dashboard' },
-  { icon: MessageCircle, label: 'Chat', path: '/dashboard/chat' },
-  { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
-  { icon: Building2, label: 'Hotel', path: '/dashboard/automation' },
-  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
+// Define which roles can access each nav item
+type NavItem = {
+  icon: typeof LayoutDashboard;
+  label: string;
+  path: string;
+  roles: TeamRole[]; // which roles can see this item
+};
+
+// Full sidebar nav items with role access
+const allNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', roles: ['admin', 'manager'] },
+  { icon: Phone, label: 'WhatsApp Numbers', path: '/dashboard/numbers', roles: ['admin'] },
+  { icon: MessageCircle, label: 'Live Chat', path: '/dashboard/chat', roles: ['admin', 'manager', 'agent'] },
+  { icon: Users, label: 'Contacts', path: '/dashboard/contacts', roles: ['admin', 'manager'] },
+  { icon: FileText, label: 'Templates', path: '/dashboard/templates', roles: ['admin', 'manager'] },
+  { icon: Building2, label: 'Automation', path: '/dashboard/automation', roles: ['admin'] },
+  { icon: UsersRound, label: 'Team', path: '/dashboard/team', roles: ['admin', 'manager'] },
+  { icon: Settings, label: 'Settings', path: '/dashboard/settings', roles: ['admin', 'manager'] },
 ];
 
-// Full sidebar nav items
-const navItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: Phone, label: 'WhatsApp Numbers', path: '/dashboard/numbers' },
-  { icon: MessageCircle, label: 'Live Chat', path: '/dashboard/chat' },
-  { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
-  { icon: FileText, label: 'Templates', path: '/dashboard/templates' },
-  { icon: Building2, label: 'Automation', path: '/dashboard/automation' },
-  { icon: UsersRound, label: 'Team', path: '/dashboard/team' },
-  { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
+// Mobile bottom nav items with role access
+const allMobileNavItems: NavItem[] = [
+  { icon: LayoutDashboard, label: 'Home', path: '/dashboard', roles: ['admin', 'manager'] },
+  { icon: MessageCircle, label: 'Chat', path: '/dashboard/chat', roles: ['admin', 'manager', 'agent'] },
+  { icon: Users, label: 'Contacts', path: '/dashboard/contacts', roles: ['admin', 'manager'] },
+  { icon: Building2, label: 'Hotel', path: '/dashboard/automation', roles: ['admin'] },
+  { icon: Settings, label: 'Settings', path: '/dashboard/settings', roles: ['admin', 'manager'] },
 ];
 
 export function DashboardLayout() {
@@ -67,7 +77,12 @@ export function DashboardLayout() {
   const { user, profile, signOut } = useAuth();
   const { numbers, selectedNumber, selectNumber } = useWhatsApp();
   const { isSuperAdmin } = useSuperAdmin();
+  const { role } = useTeamRole();
   const location = useLocation();
+
+  // Filter nav items based on user's team role
+  const navItems = allNavItems.filter(item => item.roles.includes(role));
+  const mobileNavItems = allMobileNavItems.filter(item => item.roles.includes(role));
 
   const initials = profile?.full_name
     ?.split(' ')

@@ -312,6 +312,7 @@ export type Database = {
           contact_phone: string
           created_at: string
           id: string
+          labels: string[] | null
           last_message_at: string | null
           last_message_text: string | null
           status: Database["public"]["Enums"]["conversation_status"]
@@ -326,6 +327,7 @@ export type Database = {
           contact_phone: string
           created_at?: string
           id?: string
+          labels?: string[] | null
           last_message_at?: string | null
           last_message_text?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -340,6 +342,7 @@ export type Database = {
           contact_phone?: string
           created_at?: string
           id?: string
+          labels?: string[] | null
           last_message_at?: string | null
           last_message_text?: string | null
           status?: Database["public"]["Enums"]["conversation_status"]
@@ -772,6 +775,42 @@ export type Database = {
           id?: string
           status?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      quick_replies: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          message: string
+          shortcut: string | null
+          title: string
+          updated_at: string
+          usage_count: number | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          shortcut?: string | null
+          title: string
+          updated_at?: string
+          usage_count?: number | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          shortcut?: string | null
+          title?: string
+          updated_at?: string
+          usage_count?: number | null
+          user_id?: string
         }
         Relationships: []
       }

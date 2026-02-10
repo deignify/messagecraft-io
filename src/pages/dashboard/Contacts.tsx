@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizePhone, isSamePhone, findDuplicates, formatPhoneE164 } from '@/lib/phone-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -109,13 +110,51 @@ export default function Contacts() {
   const handleAddContact = async () => {
     if (!selectedNumber || !user || !formData.phone) return;
 
+    // Normalize the phone number
+    const normalizedPhone = formatPhoneE164(formData.phone);
+
+    // Check for existing duplicate
+    const existing = contacts.find((c) => isSamePhone(c.phone, normalizedPhone));
+    if (existing) {
+      // Auto-merge: update existing contact with new data
+      setSaving(true);
+      try {
+        const mergedData = {
+          name: formData.name || existing.name,
+          email: formData.email || existing.email,
+          category: formData.category || existing.category,
+          notes: [existing.notes, formData.notes].filter(Boolean).join('\n') || null,
+          tags: [...new Set([...(existing.tags || []), ...formData.tags])],
+        };
+
+        const { error } = await supabase
+          .from('contacts')
+          .update(mergedData)
+          .eq('id', existing.id);
+
+        if (error) throw error;
+
+        setContacts(contacts.map((c) =>
+          c.id === existing.id ? { ...c, ...mergedData } as Contact : c
+        ));
+        setAddDialogOpen(false);
+        resetForm();
+        toast({ title: 'Contact merged with existing record' });
+      } catch (error: any) {
+        toast({ title: 'Error merging contact', description: error.message, variant: 'destructive' });
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const { data, error } = await supabase.from('contacts').insert({
         user_id: user.id,
         whatsapp_number_id: selectedNumber.id,
         name: formData.name || null,
-        phone: formData.phone,
+        phone: normalizedPhone,
         email: formData.email || null,
         category: formData.category || null,
         notes: formData.notes || null,
@@ -248,6 +287,51 @@ export default function Contacts() {
     return matchesSearch && matchesCategory;
   });
 
+  // Detect duplicates
+  const duplicateGroups = useMemo(() => findDuplicates(contacts), [contacts]);
+  const duplicateCount = duplicateGroups.size;
+
+  const handleMergeAllDuplicates = async () => {
+    if (duplicateCount === 0) return;
+    setSaving(true);
+    try {
+      for (const [, group] of duplicateGroups) {
+        // Keep the first (oldest) contact, merge others into it
+        const [primary, ...others] = group.sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        const mergedName = primary.name || others.find((o) => o.name)?.name || null;
+        const mergedEmail = primary.email || others.find((o) => o.email)?.email || null;
+        const mergedCategory = primary.category || others.find((o) => o.category)?.category || null;
+        const mergedNotes = [primary.notes, ...others.map((o) => o.notes)].filter(Boolean).join('\n') || null;
+        const mergedTags = [...new Set([...(primary.tags || []), ...others.flatMap((o) => o.tags || [])])];
+
+        await supabase
+          .from('contacts')
+          .update({ name: mergedName, email: mergedEmail, category: mergedCategory, notes: mergedNotes, tags: mergedTags })
+          .eq('id', primary.id);
+
+        const otherIds = others.map((o) => o.id);
+        await supabase.from('contacts').delete().in('id', otherIds);
+      }
+
+      // Re-fetch contacts
+      const { data } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('whatsapp_number_id', selectedNumber!.id)
+        .order('name', { ascending: true });
+
+      if (data) setContacts(data as Contact[]);
+      toast({ title: `Merged ${duplicateCount} duplicate groups` });
+    } catch (error: any) {
+      toast({ title: 'Error merging', description: error.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (!selectedNumber) {
     return (
       <div className="flex items-center justify-center h-full p-8">
@@ -348,6 +432,13 @@ export default function Contacts() {
           <Button variant="destructive" size="sm" onClick={handleDeleteContacts}>
             <Trash2 className="h-4 w-4" />
             Delete ({selectedContacts.size})
+          </Button>
+        )}
+
+        {duplicateCount > 0 && (
+          <Button variant="outline" size="sm" onClick={handleMergeAllDuplicates} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Merge {duplicateCount} Duplicate{duplicateCount > 1 ? 's' : ''}
           </Button>
         )}
       </div>

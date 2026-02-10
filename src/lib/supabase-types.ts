@@ -135,6 +135,13 @@ export interface UserSettings {
   notification_sound: boolean;
   auto_assign: boolean;
   timezone: string;
+  working_hours_enabled: boolean;
+  working_hours_start: string;
+  working_hours_end: string;
+  working_days: string[];
+  auto_reply_enabled: boolean;
+  auto_reply_message: string;
+  outside_hours_message: string;
   created_at: string;
   updated_at: string;
 }

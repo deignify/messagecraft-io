@@ -1040,32 +1040,53 @@ export type Database = {
         Row: {
           auto_assign: boolean | null
           auto_assign_enabled: boolean | null
+          auto_reply_enabled: boolean | null
+          auto_reply_message: string | null
           created_at: string
           id: string
           notification_sound: boolean | null
+          outside_hours_message: string | null
           selected_whatsapp_id: string | null
           timezone: string | null
           updated_at: string
+          working_days: string[] | null
+          working_hours_enabled: boolean | null
+          working_hours_end: string | null
+          working_hours_start: string | null
         }
         Insert: {
           auto_assign?: boolean | null
           auto_assign_enabled?: boolean | null
+          auto_reply_enabled?: boolean | null
+          auto_reply_message?: string | null
           created_at?: string
           id: string
           notification_sound?: boolean | null
+          outside_hours_message?: string | null
           selected_whatsapp_id?: string | null
           timezone?: string | null
           updated_at?: string
+          working_days?: string[] | null
+          working_hours_enabled?: boolean | null
+          working_hours_end?: string | null
+          working_hours_start?: string | null
         }
         Update: {
           auto_assign?: boolean | null
           auto_assign_enabled?: boolean | null
+          auto_reply_enabled?: boolean | null
+          auto_reply_message?: string | null
           created_at?: string
           id?: string
           notification_sound?: boolean | null
+          outside_hours_message?: string | null
           selected_whatsapp_id?: string | null
           timezone?: string | null
           updated_at?: string
+          working_days?: string[] | null
+          working_hours_enabled?: boolean | null
+          working_hours_end?: string | null
+          working_hours_start?: string | null
         }
         Relationships: [
           {

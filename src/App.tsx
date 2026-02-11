@@ -22,6 +22,7 @@ import Contacts from "./pages/dashboard/Contacts";
 import Templates from "./pages/dashboard/Templates";
 import Automation from "./pages/dashboard/Automation";
 import HotelAutomation from "./pages/dashboard/HotelAutomation";
+import CTWAAds from "./pages/dashboard/CTWAAds";
 import TeamManagement from "./pages/dashboard/TeamManagement";
 import SettingsPage from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
@@ -83,6 +84,7 @@ const App = () => (
                 <Route path="automation" element={<RoleGuard allowedRoles={['admin']}><Automation /></RoleGuard>} />
                 <Route path="automation/hotel" element={<RoleGuard allowedRoles={['admin']}><HotelAutomation /></RoleGuard>} />
                 <Route path="team" element={<RoleGuard allowedRoles={['admin', 'manager']}><TeamManagement /></RoleGuard>} />
+                <Route path="ctwa-ads" element={<RoleGuard allowedRoles={['admin', 'manager']}><CTWAAds /></RoleGuard>} />
                 <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'manager']}><SettingsPage /></RoleGuard>} />
               </Route>
 

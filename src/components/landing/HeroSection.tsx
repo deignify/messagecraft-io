@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function HeroSection() {
+  const { user, loading } = useAuth();
+
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden">
       {/* Background */}
@@ -37,17 +40,28 @@ export function HeroSection() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <Button variant="hero" size="xl" asChild>
-              <Link to="/signup">
-                Start Free Trial
-                <ArrowRight className="h-5 w-5" />
-              </Link>
-            </Button>
-            <Button variant="brand-outline" size="xl" asChild>
-              <Link to="/pricing">
-                View Pricing
-              </Link>
-            </Button>
+            {!loading && user ? (
+              <Button variant="hero" size="xl" asChild>
+                <Link to="/dashboard">
+                  Go to Dashboard
+                  <ArrowRight className="h-5 w-5" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="hero" size="xl" asChild>
+                  <Link to="/signup">
+                    Start Free Trial
+                    <ArrowRight className="h-5 w-5" />
+                  </Link>
+                </Button>
+                <Button variant="brand-outline" size="xl" asChild>
+                  <Link to="/pricing">
+                    View Pricing
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Trust indicators */}

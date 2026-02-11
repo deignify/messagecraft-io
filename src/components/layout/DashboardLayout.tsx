@@ -39,6 +39,7 @@ import {
   Building2,
   Shield,
   UsersRound,
+  MousePointerClick,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -58,6 +59,7 @@ const allNavItems: NavItem[] = [
   { icon: Users, label: 'Contacts', path: '/dashboard/contacts', roles: ['admin', 'manager'] },
   { icon: FileText, label: 'Templates', path: '/dashboard/templates', roles: ['admin', 'manager'] },
   { icon: Building2, label: 'Automation', path: '/dashboard/automation', roles: ['admin'] },
+  { icon: MousePointerClick, label: 'CTWA Ads', path: '/dashboard/ctwa-ads', roles: ['admin', 'manager'] },
   { icon: UsersRound, label: 'Team', path: '/dashboard/team', roles: ['admin', 'manager'] },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings', roles: ['admin', 'manager'] },
 ];

@@ -8,6 +8,7 @@ import {
   Clock,
   Globe,
   UserCog,
+  MousePointerClick,
 } from 'lucide-react';
 
 const features = [
@@ -20,6 +21,11 @@ const features = [
     icon: Zap,
     title: 'Smart Automation',
     description: 'Create automated workflows for common queries. Set up keyword triggers and menu-based responses.',
+  },
+  {
+    icon: MousePointerClick,
+    title: 'Click To WhatsApp Ads',
+    description: 'Boost leads by 5X and cut costs by 60% with Facebook & Instagram ads that open directly in WhatsApp.',
   },
   {
     icon: UserCog,

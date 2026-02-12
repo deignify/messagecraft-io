@@ -101,6 +101,7 @@ export default function CTWAAds() {
   const [formAdText, setFormAdText] = useState('');
   const [formPreMessage, setFormPreMessage] = useState("Hi, I'm interested!");
   const [formPlatform, setFormPlatform] = useState('both');
+  const [formPageId, setFormPageId] = useState('');
 
   const deepLink = selectedNumber
     ? `https://wa.me/${selectedNumber.phone_number.replace(/\D/g, '')}?text=${encodeURIComponent(formPreMessage)}`
@@ -128,7 +129,7 @@ export default function CTWAAds() {
   }, [loadData]);
 
   const handleCreate = async () => {
-    if (!selectedNumber || !formName.trim()) return;
+    if (!selectedNumber || !formName.trim() || !formPageId.trim()) return;
     setCreating(true);
     try {
       await callCTWA('create', {
@@ -138,6 +139,7 @@ export default function CTWAAds() {
         ad_text: formAdText,
         pre_filled_message: formPreMessage,
         platform: formPlatform,
+        page_id: formPageId,
       });
       toast({ title: 'Campaign created!', description: 'Campaign is paused. Activate it when ready.' });
       setDialogOpen(false);
@@ -261,6 +263,21 @@ export default function CTWAAds() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Facebook Page ID *</Label>
+                  <Input
+                    value={formPageId}
+                    onChange={(e) => setFormPageId(e.target.value)}
+                    placeholder="e.g., 123456789012345"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Find it in your{' '}
+                    <a href="https://www.facebook.com/settings/?tab=pages" target="_blank" rel="noopener" className="underline text-primary">
+                      Facebook Page Settings
+                    </a>
+                    {' '}→ Page ID. Must be linked to your WhatsApp Business Account.
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label>Daily Budget (₹)</Label>
                   <Input
                     type="number"
@@ -289,7 +306,7 @@ export default function CTWAAds() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={creating || !formName.trim()}>
+                <Button onClick={handleCreate} disabled={creating || !formName.trim() || !formPageId.trim()}>
                   {creating && <Loader2 className="h-4 w-4 animate-spin" />}
                   Create Campaign
                 </Button>

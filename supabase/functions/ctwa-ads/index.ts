@@ -128,8 +128,12 @@ async function createCampaign(
   adsAccessToken: string,
   params: any
 ) {
-  const { whatsapp_number_id, name, daily_budget, ad_text, pre_filled_message, platform, targeting } = params;
+  const { whatsapp_number_id, name, daily_budget, ad_text, pre_filled_message, platform, targeting, page_id } = params;
   
+  if (!page_id) {
+    throw new Error("Facebook Page ID is required for CTWA campaigns");
+  }
+
   const waData = await getMetaAccessToken(supabase, userId, whatsapp_number_id);
   const phoneNumber = waData.phone_number;
 
@@ -153,26 +157,30 @@ async function createCampaign(
     throw new Error(`Meta Campaign Error: ${campaignData.error.message}`);
   }
 
-  // 2. Create Ad Set
+  // 2. Create Ad Set with proper CTWA config
+  const adSetBody: Record<string, any> = {
+    name: `${name} - Ad Set`,
+    campaign_id: campaignData.id,
+    daily_budget: Math.round((daily_budget || 500) * 100), // Convert to paise/cents
+    billing_event: "IMPRESSIONS",
+    optimization_goal: "CONVERSATIONS",
+    destination_type: "WHATSAPP",
+    status: "PAUSED",
+    targeting: targeting?.geo_locations 
+      ? { geo_locations: targeting.geo_locations } 
+      : { geo_locations: { countries: ["IN"] } },
+    access_token: adsAccessToken,
+    promoted_object: {
+      page_id: page_id,
+    },
+  };
+
   const adSetRes = await fetch(
     `${META_GRAPH_URL}/act_${adAccountId}/adsets`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `${name} - Ad Set`,
-        campaign_id: campaignData.id,
-        daily_budget: Math.round((daily_budget || 500) * 100), // Convert to paise/cents
-        billing_event: "IMPRESSIONS",
-        optimization_goal: "CONVERSATIONS",
-        destination_type: "WHATSAPP",
-        status: "PAUSED",
-        targeting: targeting || { geo_locations: { countries: ["IN"] } },
-        access_token: adsAccessToken,
-        promoted_object: {
-          page_id: targeting?.page_id,
-        },
-      }),
+      body: JSON.stringify(adSetBody),
     }
   );
   const adSetData = await adSetRes.json();

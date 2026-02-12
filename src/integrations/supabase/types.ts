@@ -368,6 +368,92 @@ export type Database = {
           },
         ]
       }
+      ctwa_campaigns: {
+        Row: {
+          ad_text: string | null
+          clicks: number | null
+          cost_per_lead: number | null
+          created_at: string | null
+          daily_budget: number | null
+          deep_link: string | null
+          id: string
+          impressions: number | null
+          leads: number | null
+          meta_ad_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          name: string
+          objective: string
+          platform: string
+          pre_filled_message: string | null
+          spend: number | null
+          status: string
+          targeting: Json | null
+          total_budget: number | null
+          updated_at: string | null
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          ad_text?: string | null
+          clicks?: number | null
+          cost_per_lead?: number | null
+          created_at?: string | null
+          daily_budget?: number | null
+          deep_link?: string | null
+          id?: string
+          impressions?: number | null
+          leads?: number | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          name: string
+          objective?: string
+          platform?: string
+          pre_filled_message?: string | null
+          spend?: number | null
+          status?: string
+          targeting?: Json | null
+          total_budget?: number | null
+          updated_at?: string | null
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          ad_text?: string | null
+          clicks?: number | null
+          cost_per_lead?: number | null
+          created_at?: string | null
+          daily_budget?: number | null
+          deep_link?: string | null
+          id?: string
+          impressions?: number | null
+          leads?: number | null
+          meta_ad_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          name?: string
+          objective?: string
+          platform?: string
+          pre_filled_message?: string | null
+          spend?: number | null
+          status?: string
+          targeting?: Json | null
+          total_budget?: number | null
+          updated_at?: string | null
+          user_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ctwa_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotel_bookings: {
         Row: {
           adults: number | null

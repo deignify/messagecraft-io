@@ -40,9 +40,16 @@ Deno.serve(async (req) => {
     const userId = claimsData.claims.sub;
 
     const { action, ...params } = await req.json();
-    const adAccountId = Deno.env.get("META_AD_ACCOUNT_ID");
+    let adAccountId = Deno.env.get("META_AD_ACCOUNT_ID");
     if (!adAccountId) {
       throw new Error("META_AD_ACCOUNT_ID not configured");
+    }
+    // Strip act_ prefix if user included it
+    adAccountId = adAccountId.replace(/^act_/, "");
+
+    const adsAccessToken = Deno.env.get("META_ADS_ACCESS_TOKEN");
+    if (!adsAccessToken) {
+      throw new Error("META_ADS_ACCESS_TOKEN not configured");
     }
 
     let result;
@@ -52,16 +59,16 @@ Deno.serve(async (req) => {
         result = await listCampaigns(supabase, userId, params.whatsapp_number_id);
         break;
       case "create":
-        result = await createCampaign(supabase, userId, adAccountId, params);
+        result = await createCampaign(supabase, userId, adAccountId, adsAccessToken, params);
         break;
       case "update-status":
-        result = await updateCampaignStatus(supabase, userId, adAccountId, params);
+        result = await updateCampaignStatus(supabase, userId, adAccountId, adsAccessToken, params);
         break;
       case "delete":
-        result = await deleteCampaign(supabase, userId, adAccountId, params);
+        result = await deleteCampaign(supabase, userId, adAccountId, adsAccessToken, params);
         break;
       case "sync-insights":
-        result = await syncInsights(supabase, userId, adAccountId, params);
+        result = await syncInsights(supabase, userId, adAccountId, adsAccessToken, params);
         break;
       case "get-stats":
         result = await getStats(supabase, userId, params.whatsapp_number_id);
@@ -118,12 +125,12 @@ async function createCampaign(
   supabase: any,
   userId: string,
   adAccountId: string,
+  adsAccessToken: string,
   params: any
 ) {
   const { whatsapp_number_id, name, daily_budget, ad_text, pre_filled_message, platform, targeting } = params;
   
   const waData = await getMetaAccessToken(supabase, userId, whatsapp_number_id);
-  const accessToken = waData.access_token;
   const phoneNumber = waData.phone_number;
 
   // 1. Create Campaign in Meta
@@ -137,7 +144,7 @@ async function createCampaign(
         objective: "OUTCOME_ENGAGEMENT",
         status: "PAUSED",
         special_ad_categories: [],
-        access_token: accessToken,
+        access_token: adsAccessToken,
       }),
     }
   );
@@ -161,7 +168,7 @@ async function createCampaign(
         destination_type: "WHATSAPP",
         status: "PAUSED",
         targeting: targeting || { geo_locations: { countries: ["IN"] } },
-        access_token: accessToken,
+        access_token: adsAccessToken,
         promoted_object: {
           page_id: targeting?.page_id,
         },
@@ -174,7 +181,7 @@ async function createCampaign(
     await fetch(`${META_GRAPH_URL}/${campaignData.id}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ access_token: accessToken }),
+      body: JSON.stringify({ access_token: adsAccessToken }),
     });
     throw new Error(`Meta Ad Set Error: ${adSetData.error.message}`);
   }
@@ -213,6 +220,7 @@ async function updateCampaignStatus(
   supabase: any,
   userId: string,
   adAccountId: string,
+  adsAccessToken: string,
   params: any
 ) {
   const { campaign_id, new_status } = params;
@@ -220,15 +228,12 @@ async function updateCampaignStatus(
   // Get campaign from DB
   const { data: campaign, error } = await supabase
     .from("ctwa_campaigns")
-    .select("*, whatsapp_numbers!ctwa_campaigns_whatsapp_number_id_fkey(access_token)")
+    .select("*")
     .eq("id", campaign_id)
     .eq("user_id", userId)
     .single();
 
   if (error || !campaign) throw new Error("Campaign not found");
-
-  const accessToken = campaign.whatsapp_numbers?.access_token;
-  if (!accessToken) throw new Error("No access token found");
 
   const metaStatus = new_status === "active" ? "ACTIVE" : "PAUSED";
 
@@ -237,7 +242,7 @@ async function updateCampaignStatus(
     const res = await fetch(`${META_GRAPH_URL}/${campaign.meta_campaign_id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: metaStatus, access_token: accessToken }),
+      body: JSON.stringify({ status: metaStatus, access_token: adsAccessToken }),
     });
     const data = await res.json();
     if (data.error) {
@@ -261,13 +266,14 @@ async function deleteCampaign(
   supabase: any,
   userId: string,
   adAccountId: string,
+  adsAccessToken: string,
   params: any
 ) {
   const { campaign_id } = params;
 
   const { data: campaign, error } = await supabase
     .from("ctwa_campaigns")
-    .select("*, whatsapp_numbers!ctwa_campaigns_whatsapp_number_id_fkey(access_token)")
+    .select("*")
     .eq("id", campaign_id)
     .eq("user_id", userId)
     .single();
@@ -275,12 +281,12 @@ async function deleteCampaign(
   if (error || !campaign) throw new Error("Campaign not found");
 
   // Delete from Meta if exists
-  if (campaign.meta_campaign_id && campaign.whatsapp_numbers?.access_token) {
+  if (campaign.meta_campaign_id) {
     try {
       await fetch(`${META_GRAPH_URL}/${campaign.meta_campaign_id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: campaign.whatsapp_numbers.access_token }),
+        body: JSON.stringify({ access_token: adsAccessToken }),
       });
     } catch (e) {
       console.error("Failed to delete Meta campaign:", e);
@@ -301,11 +307,10 @@ async function syncInsights(
   supabase: any,
   userId: string,
   adAccountId: string,
+  adsAccessToken: string,
   params: any
 ) {
   const { whatsapp_number_id } = params;
-  const waData = await getMetaAccessToken(supabase, userId, whatsapp_number_id);
-  const accessToken = waData.access_token;
 
   // Get all campaigns with Meta IDs
   const { data: campaigns, error } = await supabase
@@ -322,7 +327,7 @@ async function syncInsights(
   for (const campaign of campaigns || []) {
     try {
       const insightsRes = await fetch(
-        `${META_GRAPH_URL}/${campaign.meta_campaign_id}/insights?fields=clicks,impressions,spend,actions&access_token=${accessToken}`
+        `${META_GRAPH_URL}/${campaign.meta_campaign_id}/insights?fields=clicks,impressions,spend,actions&access_token=${adsAccessToken}`
       );
       const insightsData = await insightsRes.json();
 
@@ -352,7 +357,7 @@ async function syncInsights(
 
       // Also sync campaign status
       const campaignRes = await fetch(
-        `${META_GRAPH_URL}/${campaign.meta_campaign_id}?fields=status&access_token=${accessToken}`
+        `${META_GRAPH_URL}/${campaign.meta_campaign_id}?fields=status&access_token=${adsAccessToken}`
       );
       const campaignData = await campaignRes.json();
       if (campaignData.status) {

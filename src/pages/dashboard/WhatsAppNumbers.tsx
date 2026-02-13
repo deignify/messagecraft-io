@@ -20,6 +20,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Phone,
   Plus,
@@ -33,11 +36,15 @@ import {
   Wifi,
   WifiOff,
   RotateCcw,
+  Cloud,
+  Smartphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { WhatsAppNumber } from '@/lib/supabase-types';
+
+type ConnectionType = 'cloud_api' | 'business_app';
 
 export default function WhatsAppNumbers() {
   const { numbers, selectedNumber, selectNumber, refreshNumbers, loading } = useWhatsApp();
@@ -47,6 +54,8 @@ export default function WhatsAppNumbers() {
   const [numberToUnlink, setNumberToUnlink] = useState<WhatsAppNumber | null>(null);
   const [unlinking, setUnlinking] = useState(false);
   const [syncingTokens, setSyncingTokens] = useState(false);
+  const [connectionType, setConnectionType] = useState<ConnectionType>('cloud_api');
+  const [configId, setConfigId] = useState('');
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -105,7 +114,11 @@ export default function WhatsAppNumbers() {
       return;
     }
 
-    // Generate the Meta OAuth URL via an authenticated call (so the backend can embed user_id in state)
+    if (connectionType === 'business_app' && !configId.trim()) {
+      toast.error('Please enter your Meta Configuration ID');
+      return;
+    }
+
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
     const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
     const returnUrl = `${window.location.origin}/dashboard/numbers`;
@@ -120,6 +133,8 @@ export default function WhatsAppNumbers() {
         body: JSON.stringify({
           redirect_uri: functionBaseUrl,
           return_url: returnUrl,
+          account_type: connectionType,
+          config_id: connectionType === 'business_app' ? configId.trim() : undefined,
         }),
       });
 
@@ -131,7 +146,7 @@ export default function WhatsAppNumbers() {
       window.location.href = data.auth_url;
     } catch (err) {
       console.error('Failed to start Meta OAuth:', err);
-      toast.error('Failed to start Meta OAuth. Please try again.');
+      toast.error('Failed to start connection. Please try again.');
     }
   };
 
@@ -448,28 +463,117 @@ export default function WhatsAppNumbers() {
                 Connect Number
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Connect WhatsApp Number</DialogTitle>
                 <DialogDescription>
-                  Connect your WhatsApp Business number through Meta's OAuth flow.
-                  You'll be redirected to Meta to authorize access.
+                  Choose your connection type and connect through Meta's OAuth flow.
                 </DialogDescription>
               </DialogHeader>
               
-              <div className="space-y-4 py-4">
+              <div className="space-y-5 py-4">
+                {/* Account Type Selection */}
+                <RadioGroup
+                  value={connectionType}
+                  onValueChange={(val) => setConnectionType(val as ConnectionType)}
+                  className="grid grid-cols-1 gap-3"
+                >
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                      connectionType === 'cloud_api'
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/30"
+                    )}
+                  >
+                    <RadioGroupItem value="cloud_api" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Cloud className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">WhatsApp Cloud API</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Connect via Meta's standard OAuth flow. Best for businesses using the WhatsApp Cloud API directly.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-all",
+                      connectionType === 'business_app'
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/30"
+                    )}
+                  >
+                    <RadioGroupItem value="business_app" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">WhatsApp Business App</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Connect your existing WhatsApp Business App via Meta Embedded Signup with Configuration ID.
+                      </p>
+                    </div>
+                  </label>
+                </RadioGroup>
+
+                {/* Config ID input for Business App */}
+                {connectionType === 'business_app' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="config-id">Meta Configuration ID *</Label>
+                    <Input
+                      id="config-id"
+                      value={configId}
+                      onChange={(e) => setConfigId(e.target.value)}
+                      placeholder="e.g., 123456789012345"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Find this in your{' '}
+                      <a 
+                        href="https://developers.facebook.com/apps" 
+                        target="_blank" 
+                        rel="noopener" 
+                        className="underline text-primary"
+                      >
+                        Meta Developer Dashboard
+                      </a>
+                      {' '}→ Your App → WhatsApp → Embedded Signup → Configuration ID.
+                    </p>
+                  </div>
+                )}
+
+                {/* Prerequisites */}
                 <div className="bg-muted rounded-lg p-4 text-sm">
-                  <h4 className="font-medium mb-2">Before you begin:</h4>
+                  <h4 className="font-medium mb-2">
+                    {connectionType === 'cloud_api' ? 'Before you begin:' : 'Requirements:'}
+                  </h4>
                   <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                     <li>Have a Meta Business Account ready</li>
-                    <li>WhatsApp Business API access approved</li>
-                    <li>At least one phone number registered</li>
+                    {connectionType === 'cloud_api' ? (
+                      <>
+                        <li>WhatsApp Business API access approved</li>
+                        <li>At least one phone number registered</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>A Meta App with Embedded Signup enabled</li>
+                        <li>Your Embedded Signup Configuration ID</li>
+                        <li>WhatsApp Business App installed on your phone</li>
+                      </>
+                    )}
                   </ul>
                 </div>
                 
-                <Button variant="hero" className="w-full" onClick={handleConnect}>
+                <Button 
+                  variant="hero" 
+                  className="w-full" 
+                  onClick={handleConnect}
+                  disabled={connectionType === 'business_app' && !configId.trim()}
+                >
                   <ExternalLink className="h-4 w-4" />
-                  Connect with Meta
+                  {connectionType === 'cloud_api' ? 'Connect with Meta' : 'Connect Business App'}
                 </Button>
                 
                 <p className="text-xs text-center text-muted-foreground">
@@ -564,6 +668,14 @@ export default function WhatsAppNumbers() {
                           Selected
                         </span>
                       )}
+                      <span className={cn(
+                        "px-2 py-0.5 text-xs font-medium rounded-full",
+                        (number as any).account_type === 'business_app'
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {(number as any).account_type === 'business_app' ? 'Business App' : 'Cloud API'}
+                      </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {number.phone_number}

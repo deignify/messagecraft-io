@@ -21,6 +21,8 @@ export interface Profile {
   updated_at: string;
 }
 
+export type WhatsAppAccountType = 'cloud_api' | 'business_app';
+
 export interface WhatsAppNumber {
   id: string;
   user_id: string;
@@ -34,6 +36,7 @@ export interface WhatsAppNumber {
   business_name: string | null;
   quality_rating: string | null;
   messaging_limit: string | null;
+  account_type: WhatsAppAccountType;
   created_at: string;
   updated_at: string;
 }

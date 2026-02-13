@@ -86,22 +86,31 @@ Deno.serve(async (req) => {
         })
       }
 
-      // State contains user ID and timestamp + where to send the user back to
+      // State contains user ID, timestamp, account_type and where to send the user back to
+      const accountType = url.searchParams.get('account_type') || 'cloud_api'
       const state = btoa(
         JSON.stringify({
           user_id: userId,
           timestamp: Date.now(),
           return_url: returnUrl,
+          account_type: accountType,
         })
       )
 
       // Meta OAuth URL with WhatsApp Business Management scope
-      const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
+      const authUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth')
       authUrl.searchParams.set('client_id', META_APP_ID)
       authUrl.searchParams.set('redirect_uri', callbackUri)
       authUrl.searchParams.set('state', state)
       authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
       authUrl.searchParams.set('response_type', 'code')
+      
+      // For Business App type, add config_id for embedded signup
+      const configId = url.searchParams.get('config_id')
+      if (accountType === 'business_app' && configId) {
+        authUrl.searchParams.set('config_id', configId)
+        authUrl.searchParams.set('override_default_response_type', 'true')
+      }
 
       // Redirect to Meta
       return new Response(null, {
@@ -119,7 +128,7 @@ Deno.serve(async (req) => {
     
     if (code && state) {
       // Verify state
-      let stateData: { user_id: string | null; timestamp: number; return_url?: string }
+      let stateData: { user_id: string | null; timestamp: number; return_url?: string; account_type?: string }
       try {
         stateData = JSON.parse(atob(state))
       } catch {
@@ -201,6 +210,7 @@ Deno.serve(async (req) => {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       let numbersStored = 0
       const allWabaIds: string[] = []
+      const accountType = stateData.account_type || 'cloud_api'
 
       // Extract phone numbers from all WABAs
       for (const business of wabaData.data || []) {
@@ -221,7 +231,8 @@ Deno.serve(async (req) => {
               status: 'active',
               business_name: business.name,
               quality_rating: phone.quality_rating,
-            }, { 
+              account_type: accountType,
+            }, {
               onConflict: 'phone_number_id',
               ignoreDuplicates: false 
             })
@@ -293,6 +304,8 @@ Deno.serve(async (req) => {
       const body = await req.json()
       const redirectUri = body.redirect_uri
       const returnUrlParam = body.return_url
+      const accountType = body.account_type || 'cloud_api'
+      const configId = body.config_id
 
       if (!redirectUri) {
         throw new Error('redirect_uri is required')
@@ -318,16 +331,23 @@ Deno.serve(async (req) => {
           user_id: claimsData.user.id,
           timestamp: Date.now(),
           return_url: returnUrl,
+          account_type: accountType,
         })
       )
 
       // Meta OAuth URL with WhatsApp Business Management scope
-      const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth')
+      const authUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth')
       authUrl.searchParams.set('client_id', META_APP_ID)
       authUrl.searchParams.set('redirect_uri', redirectUri)
       authUrl.searchParams.set('state', stateValue)
       authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
       authUrl.searchParams.set('response_type', 'code')
+      
+      // For Business App type, add config_id for embedded signup
+      if (accountType === 'business_app' && configId) {
+        authUrl.searchParams.set('config_id', configId)
+        authUrl.searchParams.set('override_default_response_type', 'true')
+      }
 
       return new Response(JSON.stringify({ auth_url: authUrl.toString() }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -344,7 +364,7 @@ Deno.serve(async (req) => {
       }
 
       // Verify state
-      let stateData: { user_id: string; timestamp: number }
+      let stateData: { user_id: string; timestamp: number; account_type?: string }
       try {
         stateData = JSON.parse(atob(state))
       } catch {
@@ -397,6 +417,7 @@ Deno.serve(async (req) => {
       }
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const callbackAccountType = stateData.account_type || 'cloud_api'
       const phoneNumbers: Array<{
         phone_number: string;
         display_name: string;
@@ -425,7 +446,8 @@ Deno.serve(async (req) => {
               status: 'active',
               business_name: business.name,
               quality_rating: phone.quality_rating,
-            }, { 
+              account_type: callbackAccountType,
+            }, {
               onConflict: 'phone_number_id',
               ignoreDuplicates: false 
             })

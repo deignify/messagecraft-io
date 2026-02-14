@@ -230,7 +230,11 @@ export function DashboardLayout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <header className="h-16 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-card">
+        <header className={cn(
+          "h-16 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-card",
+          // Hide header on mobile when on chat page (chat has its own header)
+          location.pathname === '/dashboard/chat' && "hidden lg:flex"
+        )}>
           <Button
             variant="ghost"
             size="icon"
@@ -298,14 +302,20 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* Page Content - extra padding bottom for mobile nav */}
-        <main className="flex-1 overflow-auto pb-16 lg:pb-0">
+        {/* Page Content - extra padding bottom for mobile nav, none on chat page */}
+        <main className={cn(
+          "flex-1 overflow-auto lg:pb-0",
+          location.pathname === '/dashboard/chat' ? "pb-0" : "pb-16"
+        )}>
           <Outlet />
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom">
+      <nav className={cn(
+        "lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom",
+        location.pathname === '/dashboard/chat' && "hidden"
+      )}>
         <div className="flex items-center justify-around h-16">
           {mobileNavItems.map((item) => {
             const isActive = location.pathname === item.path;

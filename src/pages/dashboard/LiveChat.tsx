@@ -462,7 +462,7 @@ export default function LiveChat() {
   }
 
   return (
-    <div className="h-[100dvh] md:h-[calc(100vh-64px)] flex flex-col md:flex-row">
+    <div className="h-full md:h-[calc(100vh-64px)] flex flex-col md:flex-row">
       {/* Conversations List */}
       <div className={cn(
         "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
@@ -584,13 +584,13 @@ export default function LiveChat() {
 
       {/* Chat Area */}
       <div className={cn(
-        "flex-1 flex flex-col",
+        "flex-1 flex flex-col min-h-0",
         selectedConversation ? "flex" : "hidden md:flex"
       )}>
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="h-[56px] md:h-16 px-1 md:px-4 flex items-center justify-between border-b border-border bg-card">
+            <div className="h-14 md:h-16 px-2 md:px-4 flex items-center justify-between border-b border-border bg-card flex-shrink-0">
               <div className="flex items-center gap-1.5 md:gap-3 flex-1 min-w-0">
                 <Button
                   variant="ghost"
@@ -648,7 +648,7 @@ export default function LiveChat() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-2 md:p-4">
+            <ScrollArea className="flex-1 min-h-0 p-2 md:p-4">
               <div className="space-y-2 md:space-y-3">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />

@@ -462,10 +462,10 @@ export default function LiveChat() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 md:static md:z-auto md:h-[calc(100vh-64px)] flex flex-col md:flex-row bg-background">
+    <div className="h-full md:h-[calc(100vh-64px)] flex flex-col md:flex-row">
       {/* Conversations List */}
       <div className={cn(
-        "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
+        "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card flex-1 md:flex-none",
         selectedConversation ? "hidden md:flex" : "flex"
       )}>
         {/* Search & New */}
@@ -585,7 +585,7 @@ export default function LiveChat() {
       {/* Chat Area */}
       <div className={cn(
         "flex-1 flex flex-col min-h-0",
-        selectedConversation ? "flex" : "hidden md:flex"
+        selectedConversation ? "fixed inset-0 z-50 md:static md:z-auto md:flex bg-background" : "hidden md:flex"
       )}>
         {selectedConversation ? (
           <>

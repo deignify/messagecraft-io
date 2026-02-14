@@ -24,6 +24,7 @@ import Automation from "./pages/dashboard/Automation";
 import HotelAutomation from "./pages/dashboard/HotelAutomation";
 import MobileShopAutomation from "./pages/dashboard/MobileShopAutomation";
 import CTWAAds from "./pages/dashboard/CTWAAds";
+import Campaigns from "./pages/dashboard/Campaigns";
 import TeamManagement from "./pages/dashboard/TeamManagement";
 import SettingsPage from "./pages/dashboard/Settings";
 import NotFound from "./pages/NotFound";
@@ -87,6 +88,7 @@ const App = () => (
                 <Route path="automation/mobile-shop" element={<RoleGuard allowedRoles={['admin']}><MobileShopAutomation /></RoleGuard>} />
                 <Route path="team" element={<RoleGuard allowedRoles={['admin', 'manager']}><TeamManagement /></RoleGuard>} />
                 <Route path="ctwa-ads" element={<RoleGuard allowedRoles={['admin', 'manager']}><CTWAAds /></RoleGuard>} />
+                <Route path="campaigns" element={<RoleGuard allowedRoles={['admin', 'manager']}><Campaigns /></RoleGuard>} />
                 <Route path="settings" element={<RoleGuard allowedRoles={['admin', 'manager']}><SettingsPage /></RoleGuard>} />
               </Route>
 

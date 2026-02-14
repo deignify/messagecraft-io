@@ -40,6 +40,7 @@ import {
   Shield,
   UsersRound,
   MousePointerClick,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +61,7 @@ const allNavItems: NavItem[] = [
   { icon: FileText, label: 'Templates', path: '/dashboard/templates', roles: ['admin', 'manager'] },
   { icon: Building2, label: 'Automation', path: '/dashboard/automation', roles: ['admin'] },
   { icon: MousePointerClick, label: 'CTWA Ads', path: '/dashboard/ctwa-ads', roles: ['admin', 'manager'] },
+  { icon: Megaphone, label: 'Campaigns', path: '/dashboard/campaigns', roles: ['admin', 'manager'] },
   { icon: UsersRound, label: 'Team', path: '/dashboard/team', roles: ['admin', 'manager'] },
   { icon: Settings, label: 'Settings', path: '/dashboard/settings', roles: ['admin', 'manager'] },
 ];

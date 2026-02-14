@@ -183,9 +183,10 @@ export default function WhatsAppNumbers() {
     }));
 
     const extras = JSON.stringify({
-      setup: { solutionID: META_APP_ID },
+      feature: 'whatsapp_embedded_signup',
       featureType: 'whatsapp_business_app_onboarding',
-      sessionInfoVersion: '3',
+      version: 2,
+      sessionInfoVersion: 3,
     });
 
     const authUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
@@ -282,12 +283,10 @@ export default function WhatsAppNumbers() {
               response_type: 'code',
               override_default_response_type: true,
               extras: {
-                setup: {
-                  solutionID: META_APP_ID,
-                  external_business_id: session.user?.id,
-                },
+                feature: 'whatsapp_embedded_signup',
                 featureType: 'whatsapp_business_app_onboarding',
-                sessionInfoVersion: '3',
+                version: 2,
+                sessionInfoVersion: 3,
               },
             }
           );

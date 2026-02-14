@@ -68,45 +68,51 @@ export default function WhatsAppNumbers() {
   const [fbSdkReady, setFbSdkReady] = useState(false);
   const [connectingBusiness, setConnectingBusiness] = useState(false);
 
-  // Load and initialize Facebook SDK dynamically
+  // Load and initialize Facebook SDK
   useEffect(() => {
-    const initFB = () => {
-      window.FB.init({
-        appId: META_APP_ID,
-        cookie: true,
-        xfbml: false,
-        version: 'v23.0',
-      });
-      console.log('[FB SDK] Initialized successfully');
-      setFbSdkReady(true);
+    const loadFBSDK = () => {
+      // Define the async init callback BEFORE loading the script
+      window.fbAsyncInit = function () {
+        window.FB.init({
+          appId: META_APP_ID,
+          cookie: true,
+          xfbml: true,
+          version: 'v23.0',
+        });
+        console.log('[FB SDK] Initialized successfully');
+        setFbSdkReady(true);
+      };
+
+      // If FB is already available (script was loaded previously), just init
+      if (window.FB) {
+        window.FB.init({
+          appId: META_APP_ID,
+          cookie: true,
+          xfbml: true,
+          version: 'v23.0',
+        });
+        console.log('[FB SDK] Re-initialized');
+        setFbSdkReady(true);
+        return;
+      }
+
+      // Load the SDK script
+      if (!document.getElementById('facebook-jssdk')) {
+        const js = document.createElement('script');
+        js.id = 'facebook-jssdk';
+        js.src = 'https://connect.facebook.net/en_US/sdk.js';
+        js.async = true;
+        js.defer = true;
+        js.onerror = () => {
+          console.error('[FB SDK] Failed to load');
+          toast.error('Facebook SDK failed to load. Try refreshing or disabling ad blockers.');
+        };
+        const fjs = document.getElementsByTagName('script')[0];
+        fjs?.parentNode?.insertBefore(js, fjs);
+      }
     };
 
-    // If SDK already loaded
-    if (window.FB) {
-      initFB();
-      return;
-    }
-
-    // Set the async init callback
-    window.fbAsyncInit = initFB;
-
-    // Dynamically inject the SDK script if not already present
-    if (!document.getElementById('facebook-jssdk')) {
-      const script = document.createElement('script');
-      script.id = 'facebook-jssdk';
-      script.src = 'https://connect.facebook.net/en_US/sdk.js';
-      script.async = true;
-      script.defer = true;
-      script.crossOrigin = 'anonymous';
-      script.onload = () => {
-        console.log('[FB SDK] Script loaded');
-      };
-      script.onerror = () => {
-        console.error('[FB SDK] Failed to load script');
-        toast.error('Failed to load Facebook SDK. Please refresh the page.');
-      };
-      document.body.appendChild(script);
-    }
+    loadFBSDK();
   }, []);
 
   // Handle OAuth callback results
@@ -160,34 +166,44 @@ export default function WhatsAppNumbers() {
     }
   };
 
-  // Fallback: redirect-based flow for Business App when FB SDK can't load
+  // Fallback: manual redirect that mimics Embedded Signup URL as closely as possible
   const handleBusinessAppRedirectFallback = () => {
     if (!session?.access_token) return;
 
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
-    const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
     const returnUrl = `${window.location.origin}/dashboard/numbers`;
 
-    const stateValue = btoa(
-      JSON.stringify({
-        user_id: session.user.id,
-        timestamp: Date.now(),
-        return_url: returnUrl,
-        account_type: 'business_app',
-      })
-    );
+    const extras = JSON.stringify({
+      setup: { solutionID: META_APP_ID },
+      featureType: 'whatsapp_business_app_onboarding',
+      sessionInfoVersion: '3',
+    });
 
     const authUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
+    authUrl.searchParams.set('app_id', META_APP_ID);
     authUrl.searchParams.set('client_id', META_APP_ID);
-    authUrl.searchParams.set('redirect_uri', functionBaseUrl);
-    authUrl.searchParams.set('state', stateValue);
-    authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging');
-    authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('config_id', META_CONFIG_ID);
-    authUrl.searchParams.set('feature_type', 'whatsapp_business_app_onboarding');
+    authUrl.searchParams.set('display', 'popup');
+    authUrl.searchParams.set('extras', extras);
+    authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('override_default_response_type', 'true');
+    authUrl.searchParams.set('fallback_redirect_uri', returnUrl);
+    authUrl.searchParams.set('redirect_uri', returnUrl);
 
-    window.location.href = authUrl.toString();
+    // Open in popup to match Embedded Signup behavior
+    const width = 600;
+    const height = 700;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    const popup = window.open(
+      authUrl.toString(),
+      'fb_embedded_signup',
+      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
+    );
+
+    if (!popup) {
+      // Popup blocked — redirect directly
+      window.location.href = authUrl.toString();
+    }
   };
 
   const handleConnect = async () => {
@@ -200,7 +216,6 @@ export default function WhatsAppNumbers() {
     if (connectionType === 'business_app') {
       setConnectingBusiness(true);
 
-      // If FB SDK is ready, use it for the proper Embedded Signup experience
       if (fbSdkReady && window.FB) {
         try {
           window.FB.login(
@@ -263,13 +278,13 @@ export default function WhatsAppNumbers() {
           );
         } catch (err) {
           console.error('[FB SDK] FB.login() error:', err);
-          // Fallback to redirect-based flow
           handleBusinessAppRedirectFallback();
+          setConnectingBusiness(false);
         }
       } else {
-        // FB SDK not loaded — use redirect-based fallback
         console.log('[FB SDK] Not ready, using redirect fallback');
         handleBusinessAppRedirectFallback();
+        setConnectingBusiness(false);
       }
       return;
     }

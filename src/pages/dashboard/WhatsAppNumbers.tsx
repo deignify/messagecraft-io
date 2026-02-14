@@ -213,15 +213,7 @@ export default function WhatsAppNumbers() {
                   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
                   const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
 
-                  const stateValue = btoa(
-                    JSON.stringify({
-                      user_id: session.user.id,
-                      timestamp: Date.now(),
-                      account_type: 'business_app',
-                    })
-                  );
-
-                  const res = await fetch(`${functionBaseUrl}?action=callback`, {
+                  const res = await fetch(`${functionBaseUrl}?action=sdk-callback`, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
@@ -229,8 +221,7 @@ export default function WhatsAppNumbers() {
                     },
                     body: JSON.stringify({
                       code,
-                      redirect_uri: window.location.origin + '/',
-                      state: stateValue,
+                      account_type: 'business_app',
                     }),
                   });
 

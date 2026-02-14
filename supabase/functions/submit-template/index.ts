@@ -6,17 +6,19 @@ const corsHeaders = {
 }
 
 interface TemplateButton {
-  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
   text: string;
   url?: string;
   phone_number?: string;
+  example?: string[];
 }
 
 interface TemplateComponent {
   type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
-  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'LOCATION';
   text?: string;
   buttons?: TemplateButton[];
+  example?: any;
 }
 
 Deno.serve(async (req) => {
@@ -89,11 +91,23 @@ Deno.serve(async (req) => {
           format: 'TEXT',
           text: template.header_text,
         })
-      } else if (['image', 'video', 'document'].includes(template.header_type)) {
+      } else if (template.header_type === 'location') {
         components.push({
           type: 'HEADER',
-          format: template.header_type.toUpperCase() as 'IMAGE' | 'VIDEO' | 'DOCUMENT',
+          format: 'LOCATION',
         })
+      } else if (['image', 'video', 'document'].includes(template.header_type)) {
+        const headerComponent: TemplateComponent = {
+          type: 'HEADER',
+          format: template.header_type.toUpperCase() as 'IMAGE' | 'VIDEO' | 'DOCUMENT',
+        }
+        // Add example media URL if provided
+        if (template.header_media_url) {
+          headerComponent.example = {
+            header_handle: [template.header_media_url]
+          }
+        }
+        components.push(headerComponent)
       }
     }
 
@@ -139,7 +153,7 @@ Deno.serve(async (req) => {
     }
 
     // Add buttons if present
-    const buttons = template.buttons as TemplateButton[] | null
+    const buttons = template.buttons as any[] | null
     if (buttons && buttons.length > 0) {
       const metaButtons: TemplateButton[] = buttons.map((btn: any) => {
         if (btn.type === 'quick_reply') {
@@ -148,6 +162,9 @@ Deno.serve(async (req) => {
           return { type: 'URL' as const, text: btn.text, url: btn.url }
         } else if (btn.type === 'phone_number') {
           return { type: 'PHONE_NUMBER' as const, text: btn.text, phone_number: btn.phone_number }
+        } else if (btn.type === 'copy_code') {
+          const copyBtn: any = { type: 'COPY_CODE' as const, example: btn.example ? [btn.example] : ['CODE123'] }
+          return copyBtn
         }
         return { type: 'QUICK_REPLY' as const, text: btn.text }
       })

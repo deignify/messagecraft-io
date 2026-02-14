@@ -1,13 +1,14 @@
 // Custom template types
 export type CustomTemplateCategory = 'marketing' | 'utility' | 'authentication';
 export type CustomTemplateStatus = 'draft' | 'pending' | 'approved' | 'rejected';
-export type TemplateHeaderType = 'none' | 'text' | 'image' | 'video' | 'document';
+export type TemplateHeaderType = 'none' | 'text' | 'image' | 'video' | 'document' | 'location';
 
 export interface TemplateButton {
-  type: 'quick_reply' | 'url' | 'phone_number';
+  type: 'quick_reply' | 'url' | 'phone_number' | 'copy_code';
   text: string;
   url?: string;
   phone_number?: string;
+  example?: string; // for copy_code OTP example
 }
 
 export interface TemplateVariables {
@@ -132,10 +133,11 @@ export const TEMPLATE_CATEGORIES: { value: CustomTemplateCategory; label: string
   { value: 'authentication', label: 'Authentication' },
 ];
 
-export const HEADER_TYPES: { value: TemplateHeaderType; label: string }[] = [
-  { value: 'none', label: 'No Header' },
+export const HEADER_TYPES: { value: TemplateHeaderType; label: string; icon?: string }[] = [
+  { value: 'none', label: 'None' },
   { value: 'text', label: 'Text' },
   { value: 'image', label: 'Image' },
   { value: 'video', label: 'Video' },
   { value: 'document', label: 'Document' },
+  { value: 'location', label: 'Location' },
 ];

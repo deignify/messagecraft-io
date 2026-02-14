@@ -482,7 +482,7 @@ function OrdersTab({ orders, loading, onRefresh, onUpdateOrder }: {
                       {o.date && <p className="text-xs text-muted-foreground">📅 {o.date} {o.pickup_date ? `| Pickup: ${o.pickup_date}` : ''}</p>}
                       {o.notes && <p className="text-xs text-muted-foreground italic">📝 {o.notes}</p>}
                     </div>
-                    <Select defaultValue={o.order_status || 'Pending'} onValueChange={v => handleStatusChange(o, v)}>
+                    <Select value={o.order_status || 'Pending'} onValueChange={v => handleStatusChange(o, v)}>
                       <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Update Status" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Pending">⏳ Pending</SelectItem>

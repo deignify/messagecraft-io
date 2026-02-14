@@ -858,21 +858,40 @@ Deno.serve(async (req) => {
           interactiveButtons = getPickupDateButtons()
           newState = 'collect_pickup_date'
         } else {
-          // Try to auto-match branch by city
-          const cityMatch = branches.find(b => fuzzyMatch(originalMsg.toLowerCase(), b.city.toLowerCase()))
-          if (cityMatch) {
-            // Auto-select branch matching city
-            session.data.selected_branch = cityMatch.name
-            session.data.branch_upi = cityMatch.upi_id
-            responseText = getPickupDateMessage(cityMatch.name, `${cityMatch.address}, ${cityMatch.city}`)
+          // Try to auto-match branch by EXACT city match (case-insensitive)
+          const customerCity = originalMsg.toLowerCase().trim()
+          const exactCityMatches = branches.filter(b => b.city.toLowerCase().trim() === customerCity)
+          
+          if (exactCityMatches.length === 1) {
+            // Exactly one branch in this city - auto-select
+            session.data.selected_branch = exactCityMatches[0].name
+            session.data.branch_upi = exactCityMatches[0].upi_id
+            responseText = getPickupDateMessage(exactCityMatches[0].name, `${exactCityMatches[0].address}, ${exactCityMatches[0].city}`)
             useInteractiveButtons = true
             interactiveButtons = getPickupDateButtons()
             newState = 'collect_pickup_date'
+          } else if (exactCityMatches.length > 1) {
+            // Multiple branches in same city - show only those
+            const branchTextList = exactCityMatches.map((b, i) => `${i + 1}. *${b.name}*\n   📍 ${b.address}`).join('\n\n')
+            responseText = `🏪 *${originalMsg} me ${exactCityMatches.length} branches hai:*\n\n${branchTextList}\n\n_Number type karein ya list se select karein_`
+            listBody = `🏪 *${originalMsg} me branches:*`
+            listButtonText = 'Select Branch'
+            listSections = [{
+              title: 'Branches',
+              rows: exactCityMatches.map((b, i) => ({
+                id: `branch_${i}`,
+                title: b.name.substring(0, 24),
+                description: `${b.address}`.substring(0, 72),
+              })),
+            }]
+            useInteractiveList = true
+            session.data.branches_list = exactCityMatches.map(b => b.name)
+            newState = 'choose_branch'
           } else {
-            // Show all branches as list with text fallback
+            // No branch in this city - show ALL branches
             const branchTextList = branches.map((b, i) => `${i + 1}. *${b.name}*\n   📍 ${b.address}, ${b.city}`).join('\n\n')
-            responseText = `🏪 *Pickup branch select karein:*\n\n${branchTextList}\n\n_Number type karein ya list se select karein_`
-            listBody = '🏪 *Pickup branch select karein:*'
+            responseText = `🏪 *${originalMsg} me koi branch nahi hai.*\n\nNearest branch select karein:\n\n${branchTextList}\n\n_Number type karein ya list se select karein_`
+            listBody = `🏪 *Nearest branch select karein:*`
             listButtonText = 'Select Branch'
             listSections = [{
               title: 'Our Branches',
@@ -905,11 +924,11 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Also try matching by city name
+      // Also try matching by exact city name (strict)
       if (!selectedBranchName) {
-        const cityMatchBranch = branches.find(b => fuzzyMatch(originalMsg.toLowerCase(), b.city.toLowerCase()))
-        if (cityMatchBranch) {
-          selectedBranchName = cityMatchBranch.name
+        const exactCityBranch = branches.find(b => b.city.toLowerCase().trim() === originalMsg.toLowerCase().trim())
+        if (exactCityBranch) {
+          selectedBranchName = exactCityBranch.name
         }
       }
 
@@ -1022,17 +1041,22 @@ Deno.serve(async (req) => {
 
         await appendSheet(googleToken, shop.google_sheet_id, 'Orders!A:P', [orderRow])
 
-        // Notify agent
+        // Notify agent with full order details
         if (shop.agent_notify_phone) {
-          const agentMsg = `🛒 *New Order!*\n\n` +
-            `Order: *${orderId}*\n` +
-            `Customer: *${session.data.customer_name}*\n` +
-            `Phone: ${from_phone}\n` +
-            `Product: ${session.data.selected_brand} ${session.data.selected_model} ${session.data.selected_variant} (${session.data.selected_color})\n` +
-            `Type: ${session.data.phone_type}\n` +
-            `Branch: ${session.data.selected_branch}\n` +
-            `Pickup: ${session.data.pickup_date}\n\n` +
-            `⚠️ Payment screenshot received. Please verify manually.`
+          const agentMsg = `🛒 *New Order Placed!*\n\n` +
+            `🆔 Order: *${orderId}*\n` +
+            `👤 Customer: *${session.data.customer_name}*\n` +
+            `📞 Phone: ${from_phone}\n` +
+            `🏙️ City: ${session.data.customer_city}\n\n` +
+            `📱 Product: *${session.data.selected_brand} ${session.data.selected_model}*\n` +
+            `📦 Variant: ${session.data.selected_variant}\n` +
+            `🎨 Color: ${session.data.selected_color}\n` +
+            `💰 Price: ${formatPrice(session.data.product_price as number)}\n` +
+            `📋 Type: ${(session.data.phone_type as string) === 'new' ? 'New' : 'Second Hand'}\n\n` +
+            `🏪 Branch: *${session.data.selected_branch}*\n` +
+            `📅 Pickup Date: ${session.data.pickup_date}\n` +
+            `💳 Payment: Pending Verification\n\n` +
+            `⚠️ Payment screenshot received. Please verify and update order status.`
           await sendWhatsAppMessage(phone_number_id, access_token, shop.agent_notify_phone, agentMsg)
         }
 
@@ -1310,10 +1334,12 @@ async function notifyAgent(
 ) {
   if (shop.agent_notify_phone) {
     const agentMsg = `⚠️ *Product Inquiry - Not Available*\n\n` +
-      `Customer: *${customerName}*\n` +
-      `Phone: ${customerPhone}\n` +
-      `Looking for: *${productQuery}*\n\n` +
-      `Please contact the customer and help them find an alternative.`
+      `👤 Customer: *${customerName}*\n` +
+      `📞 Phone: ${customerPhone}\n` +
+      `🔍 Looking for: *${productQuery}*\n\n` +
+      `📋 Status: Product is currently not in stock.\n` +
+      `Customer has been informed that an agent will contact them.\n\n` +
+      `Please contact the customer and help them find an alternative or confirm availability.`
     await sendWhatsAppMessage(phoneNumberId, accessToken, shop.agent_notify_phone, agentMsg)
   }
 }

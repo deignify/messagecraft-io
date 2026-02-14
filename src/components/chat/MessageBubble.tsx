@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import type { Message } from '@/lib/supabase-types';
 import { formatWhatsAppText } from '@/lib/whatsapp-format';
 import { format } from 'date-fns';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 interface MessageBubbleProps {
   message: Message;
@@ -23,7 +24,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isOutbound = message.direction === 'outbound';
-
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const getMessageStatusIcon = (status: string, errorMessage?: string | null) => {
     switch (status) {
       case 'sent':
@@ -58,12 +59,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {message.type === 'image' ? (
           <div className="space-y-2">
             {message.media_url ? (
-              <img
-                src={message.media_url}
-                alt="Image"
-                className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => window.open(message.media_url || '', '_blank')}
-              />
+              <>
+                <img
+                  src={message.media_url}
+                  alt="Image"
+                  className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setPreviewImage(message.media_url)}
+                />
+                <ImagePreviewModal
+                  src={previewImage || ''}
+                  open={!!previewImage}
+                  onClose={() => setPreviewImage(null)}
+                />
+              </>
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <ImageIcon className="h-4 w-4" />

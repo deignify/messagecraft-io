@@ -214,13 +214,15 @@ async function processIncomingMessage(
 
   const { data: existingContact } = await supabase
     .from('contacts')
-    .select('id')
+    .select('id, name')
     .eq('user_id', waNumber.user_id)
     .eq('whatsapp_number_id', waNumber.id)
     .eq('phone', contactPhone)
     .maybeSingle()
 
   const contactId = existingContact?.id as string | undefined
+  // Prefer contact name from contacts table, fallback to WhatsApp profile name
+  const resolvedName = (existingContact as any)?.name || contactName
 
   if (!contactId) {
     await supabase.from('contacts').insert({
@@ -249,7 +251,7 @@ async function processIncomingMessage(
       user_id: waNumber.user_id,
       whatsapp_number_id: waNumber.id,
       contact_phone: contactPhone,
-      contact_name: contactName,
+      contact_name: resolvedName,
       status: 'open',
       unread_count: 1,
       last_message_text: messageContent,
@@ -258,11 +260,16 @@ async function processIncomingMessage(
     conversationId = (newConv as { id: string }).id
   } else {
     conversationId = conversationData.id
-    await supabase.from('conversations').update({
+    const updateData: any = {
       unread_count: conversationData.unread_count + 1,
       last_message_text: messageContent,
       last_message_at: new Date().toISOString(),
-    }).eq('id', conversationId)
+    }
+    // Update contact name if we have a better one from contacts table
+    if (resolvedName) {
+      updateData.contact_name = resolvedName
+    }
+    await supabase.from('conversations').update(updateData).eq('id', conversationId)
   }
 
   // Download and store media if it's an image or document

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,7 +18,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Loader2, Upload, X } from 'lucide-react';
+import { Plus, Trash2, Loader2, Upload, X, Globe, Phone, MessageSquareReply } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TemplatePreview } from './TemplatePreview';
@@ -65,6 +66,7 @@ export function TemplateForm({
   });
 
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
+  const [actionType, setActionType] = useState<'none' | 'cta' | 'quick_replies' | 'all'>('none');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -82,7 +84,19 @@ export function TemplateForm({
         variables: template.variables || {},
         buttons: template.buttons || [],
       });
-      setButtons(template.buttons || []);
+      const btns = template.buttons || [];
+      setButtons(btns);
+      // Determine action type from existing buttons
+      if (btns.length === 0) {
+        setActionType('none');
+      } else {
+        const hasCta = btns.some(b => b.type === 'url' || b.type === 'phone_number');
+        const hasQr = btns.some(b => b.type === 'quick_reply');
+        if (hasCta && hasQr) setActionType('all');
+        else if (hasCta) setActionType('cta');
+        else if (hasQr) setActionType('quick_replies');
+        else setActionType('none');
+      }
     } else {
       setFormData({
         template_name: '',
@@ -97,6 +111,7 @@ export function TemplateForm({
         buttons: [],
       });
       setButtons([]);
+      setActionType('none');
     }
   }, [template, open]);
 
@@ -120,7 +135,32 @@ export function TemplateForm({
     }));
   };
 
+  const handleActionTypeChange = (value: 'none' | 'cta' | 'quick_replies' | 'all') => {
+    setActionType(value);
+    if (value === 'none') {
+      setButtons([]);
+    }
+    // Don't clear buttons on other changes so user doesn't lose work
+  };
+
   const addButton = () => {
+    if (buttons.length >= 3) return;
+    // Default type based on action type selection
+    let defaultType: TemplateButton['type'] = 'quick_reply';
+    if (actionType === 'cta') defaultType = 'url';
+    setButtons([...buttons, { type: defaultType, text: '' }]);
+  };
+
+  const addCtaButton = (type: 'url' | 'phone_number') => {
+    const ctaCount = buttons.filter(b => b.type === 'url' || b.type === 'phone_number').length;
+    if (ctaCount >= 2) return;
+    if (buttons.length >= 3) return;
+    setButtons([...buttons, { type, text: '' }]);
+  };
+
+  const addQuickReply = () => {
+    const qrCount = buttons.filter(b => b.type === 'quick_reply').length;
+    if (qrCount >= 3) return;
     if (buttons.length >= 3) return;
     setButtons([...buttons, { type: 'quick_reply', text: '' }]);
   };
@@ -394,76 +434,147 @@ export function TemplateForm({
               />
             </div>
 
-            {/* Buttons */}
+            {/* Interactive Actions */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>Buttons (Optional)</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addButton} disabled={buttons.length >= 3 || !isEditable}>
-                  <Plus className="h-4 w-4 mr-1" /> Add Button
-                </Button>
+              <div>
+                <Label className="text-base font-semibold">Interactive Actions</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  In addition to your message, you can send actions with your message. Maximum 25 characters in CTA button title & Quick Replies.
+                </p>
               </div>
 
-              {buttons.map((button, index) => (
-                <div key={index} className="p-4 border border-border rounded-lg space-y-3">
+              <RadioGroup
+                value={actionType}
+                onValueChange={(v) => handleActionTypeChange(v as any)}
+                className="flex flex-wrap gap-4"
+                disabled={!isEditable}
+              >
+                {[
+                  { value: 'none', label: 'None' },
+                  { value: 'cta', label: 'Call to Actions' },
+                  { value: 'quick_replies', label: 'Quick Replies' },
+                  { value: 'all', label: 'All' },
+                ].map((opt) => (
+                  <div key={opt.value} className="flex items-center space-x-2">
+                    <RadioGroupItem value={opt.value} id={`action-${opt.value}`} />
+                    <Label htmlFor={`action-${opt.value}`} className="text-sm font-normal cursor-pointer">{opt.label}</Label>
+                  </div>
+                ))}
+              </RadioGroup>
+
+              {/* CTA Buttons */}
+              {(actionType === 'cta' || actionType === 'all') && (
+                <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
                   <div className="flex items-center justify-between">
-                    <Label>Button {index + 1}</Label>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removeButton(index)} disabled={!isEditable}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-primary" />
+                      Call to Action Buttons
+                      <span className="text-xs text-muted-foreground font-normal">(max 2)</span>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addCtaButton('url')}
+                        disabled={buttons.filter(b => b.type === 'url' || b.type === 'phone_number').length >= 2 || !isEditable}
+                      >
+                        <Globe className="h-3 w-3 mr-1" /> URL
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => addCtaButton('phone_number')}
+                        disabled={buttons.filter(b => b.type === 'url' || b.type === 'phone_number').length >= 2 || !isEditable}
+                      >
+                        <Phone className="h-3 w-3 mr-1" /> Phone
+                      </Button>
+                    </div>
+                  </div>
+
+                  {buttons.filter(b => b.type === 'url' || b.type === 'phone_number').map((button) => {
+                    const originalIndex = buttons.indexOf(button);
+                    return (
+                      <div key={originalIndex} className="p-3 border border-border rounded-md bg-background space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                            {button.type === 'url' ? <Globe className="h-3 w-3" /> : <Phone className="h-3 w-3" />}
+                            {button.type === 'url' ? 'Visit Website' : 'Call Phone Number'}
+                          </span>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeButton(originalIndex)} disabled={!isEditable}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Button Text</Label>
+                            <Input
+                              value={button.text}
+                              onChange={(e) => updateButton(originalIndex, { text: e.target.value })}
+                              placeholder={button.type === 'url' ? 'Visit Website' : 'Call Us'}
+                              maxLength={25}
+                              disabled={!isEditable}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">{button.type === 'url' ? 'URL' : 'Phone Number'}</Label>
+                            <Input
+                              type={button.type === 'url' ? 'url' : 'tel'}
+                              value={button.type === 'url' ? (button.url || '') : (button.phone_number || '')}
+                              onChange={(e) => updateButton(originalIndex, button.type === 'url' ? { url: e.target.value } : { phone_number: e.target.value })}
+                              placeholder={button.type === 'url' ? 'https://example.com' : '+1234567890'}
+                              disabled={!isEditable}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Quick Reply Buttons */}
+              {(actionType === 'quick_replies' || actionType === 'all') && (
+                <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquareReply className="h-4 w-4 text-primary" />
+                      Quick Replies
+                      <span className="text-xs text-muted-foreground font-normal">(max 3)</span>
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addQuickReply}
+                      disabled={buttons.filter(b => b.type === 'quick_reply').length >= 3 || !isEditable}
+                    >
+                      <Plus className="h-3 w-3 mr-1" /> Add Reply
                     </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Type</Label>
-                      <Select
-                        value={button.type}
-                        onValueChange={(value: TemplateButton['type']) => updateButton(index, { type: value })}
-                        disabled={!isEditable}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="quick_reply">Quick Reply</SelectItem>
-                          <SelectItem value="url">URL</SelectItem>
-                          <SelectItem value="phone_number">Phone Number</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Button Text</Label>
-                      <Input
-                        value={button.text}
-                        onChange={(e) => updateButton(index, { text: e.target.value })}
-                        placeholder="Button text"
-                        maxLength={25}
-                        disabled={!isEditable}
-                      />
-                    </div>
-                  </div>
-                  {button.type === 'url' && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">URL</Label>
-                      <Input
-                        type="url"
-                        value={button.url || ''}
-                        onChange={(e) => updateButton(index, { url: e.target.value })}
-                        placeholder="https://example.com"
-                        disabled={!isEditable}
-                      />
-                    </div>
-                  )}
-                  {button.type === 'phone_number' && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">Phone Number</Label>
-                      <Input
-                        type="tel"
-                        value={button.phone_number || ''}
-                        onChange={(e) => updateButton(index, { phone_number: e.target.value })}
-                        placeholder="+1234567890"
-                        disabled={!isEditable}
-                      />
-                    </div>
-                  )}
+
+                  {buttons.filter(b => b.type === 'quick_reply').map((button) => {
+                    const originalIndex = buttons.indexOf(button);
+                    return (
+                      <div key={originalIndex} className="flex items-center gap-2">
+                        <MessageSquareReply className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <Input
+                          value={button.text}
+                          onChange={(e) => updateButton(originalIndex, { text: e.target.value })}
+                          placeholder="Quick reply text"
+                          maxLength={25}
+                          disabled={!isEditable}
+                          className="flex-1"
+                        />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeButton(originalIndex)} disabled={!isEditable}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
             </div>
           </div>
 

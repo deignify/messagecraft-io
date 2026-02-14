@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     // Fetch templates from Meta API
     let allTemplates: MetaTemplate[] = [];
     let nextUrl: string | null =
-      `https://graph.facebook.com/v21.0/${waNumber.waba_id}/message_templates?fields=id,name,language,status,category,components&limit=100`;
+      `https://graph.facebook.com/v23.0/${waNumber.waba_id}/message_templates?fields=id,name,language,status,category,components&limit=100`;
 
     while (nextUrl) {
       const response = await fetch(nextUrl, {

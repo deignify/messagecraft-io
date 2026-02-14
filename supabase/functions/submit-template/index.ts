@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
     console.log('Submitting template to Meta:', JSON.stringify(metaPayload, null, 2))
 
     const response = await fetch(
-      `https://graph.facebook.com/v21.0/${waNumber.waba_id}/message_templates`,
+      `https://graph.facebook.com/v23.0/${waNumber.waba_id}/message_templates`,
       {
         method: 'POST',
         headers: {

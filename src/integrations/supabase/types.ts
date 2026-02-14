@@ -1569,7 +1569,13 @@ export type Database = {
       step_type: "message" | "menu" | "condition" | "delay" | "assign"
       team_role: "admin" | "manager" | "agent"
       template_category: "AUTHENTICATION" | "MARKETING" | "UTILITY"
-      template_header_type: "none" | "text" | "image" | "video" | "document"
+      template_header_type:
+        | "none"
+        | "text"
+        | "image"
+        | "video"
+        | "document"
+        | "location"
       template_status:
         | "APPROVED"
         | "PENDING"
@@ -1733,7 +1739,14 @@ export const Constants = {
       step_type: ["message", "menu", "condition", "delay", "assign"],
       team_role: ["admin", "manager", "agent"],
       template_category: ["AUTHENTICATION", "MARKETING", "UTILITY"],
-      template_header_type: ["none", "text", "image", "video", "document"],
+      template_header_type: [
+        "none",
+        "text",
+        "image",
+        "video",
+        "document",
+        "location",
+      ],
       template_status: [
         "APPROVED",
         "PENDING",

@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Send, Trash2, Eye, Users, CheckCircle2, XCircle, Clock, Megaphone, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Send, Trash2, Eye, Users, CheckCircle2, XCircle, Clock, Megaphone, Loader2, RefreshCw, Search } from 'lucide-react';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
@@ -50,6 +50,14 @@ interface Recipient {
   sent_at: string | null;
 }
 
+interface Contact {
+  id: string;
+  phone: string;
+  name: string | null;
+  category: string | null;
+  tags: string[] | null;
+}
+
 async function getAuthHeaders() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Not authenticated');
@@ -63,7 +71,7 @@ export default function Campaigns() {
   const { selectedNumber } = useWhatsApp();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [sending, setSending] = useState<string | null>(null);
@@ -74,17 +82,36 @@ export default function Campaigns() {
   // Create form state
   const [name, setName] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Derived data
-  const allCategories = [...new Set(contacts.map(c => c.category).filter(Boolean))];
-  const allTags = [...new Set(contacts.flatMap(c => c.tags || []))];
-  const filteredContactCount = contacts.filter(c => {
-    if (selectedCategories.length > 0 && (!c.category || !selectedCategories.includes(c.category))) return false;
-    if (selectedTags.length > 0 && (!c.tags || !c.tags.some((t: string) => selectedTags.includes(t)))) return false;
-    return true;
-  }).length;
+  const allCategories = useMemo(() => {
+    const cats: Record<string, number> = {};
+    contacts.forEach(c => {
+      const cat = c.category || 'Uncategorized';
+      cats[cat] = (cats[cat] || 0) + 1;
+    });
+    return cats;
+  }, [contacts]);
+
+  const filteredContacts = useMemo(() => {
+    let result = contacts;
+    if (filterCategory && filterCategory !== 'all') {
+      result = result.filter(c =>
+        filterCategory === 'Uncategorized' ? !c.category : c.category === filterCategory
+      );
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(c =>
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        c.phone.includes(q)
+      );
+    }
+    return result;
+  }, [contacts, filterCategory, searchQuery]);
 
   useEffect(() => {
     if (selectedNumber) {
@@ -129,12 +156,53 @@ export default function Campaigns() {
       .from('contacts')
       .select('id, phone, name, category, tags')
       .eq('whatsapp_number_id', selectedNumber.id);
-    setContacts(data || []);
+    setContacts((data as Contact[]) || []);
+  }
+
+  function toggleContact(contactId: string) {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId);
+      else next.add(contactId);
+      return next;
+    });
+  }
+
+  function selectAllVisible() {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      filteredContacts.forEach(c => next.add(c.id));
+      return next;
+    });
+  }
+
+  function deselectAllVisible() {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      filteredContacts.forEach(c => next.delete(c.id));
+      return next;
+    });
+  }
+
+  function selectByCategory(category: string) {
+    setSelectedContactIds(prev => {
+      const next = new Set(prev);
+      contacts.forEach(c => {
+        if (category === 'Uncategorized' ? !c.category : c.category === category) {
+          next.add(c.id);
+        }
+      });
+      return next;
+    });
   }
 
   async function handleCreate() {
     if (!name || !selectedTemplate || !selectedNumber) {
       toast({ title: 'Error', description: 'Please fill campaign name and select a template', variant: 'destructive' });
+      return;
+    }
+    if (selectedContactIds.size === 0) {
+      toast({ title: 'Error', description: 'Please select at least one contact', variant: 'destructive' });
       return;
     }
     const template = templates.find(t => t.name === selectedTemplate);
@@ -152,8 +220,7 @@ export default function Campaigns() {
           name,
           template_name: template.name,
           template_language: template.language,
-          filter_categories: selectedCategories.length > 0 ? selectedCategories : undefined,
-          filter_tags: selectedTags.length > 0 ? selectedTags : undefined,
+          contact_ids: Array.from(selectedContactIds),
         }),
       });
       const data = await res.json();
@@ -224,15 +291,16 @@ export default function Campaigns() {
   function resetForm() {
     setName('');
     setSelectedTemplate('');
-    setSelectedCategories([]);
-    setSelectedTags([]);
+    setSelectedContactIds(new Set());
+    setSearchQuery('');
+    setFilterCategory('all');
   }
 
   function getStatusBadge(status: string) {
     switch (status) {
       case 'draft': return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Draft</Badge>;
-      case 'sending': return <Badge className="bg-blue-500"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Sending</Badge>;
-      case 'completed': return <Badge className="bg-green-600"><CheckCircle2 className="h-3 w-3 mr-1" />Completed</Badge>;
+      case 'sending': return <Badge variant="default"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Sending</Badge>;
+      case 'completed': return <Badge variant="default" className="bg-primary"><CheckCircle2 className="h-3 w-3 mr-1" />Completed</Badge>;
       default: return <Badge variant="outline">{status}</Badge>;
     }
   }
@@ -244,6 +312,8 @@ export default function Campaigns() {
       </div>
     );
   }
+
+  const allVisibleSelected = filteredContacts.length > 0 && filteredContacts.every(c => selectedContactIds.has(c.id));
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -260,23 +330,25 @@ export default function Campaigns() {
           <Button variant="outline" size="sm" onClick={fetchCampaigns}>
             <RefreshCw className="h-4 w-4 mr-1" />Refresh
           </Button>
-          <Dialog open={showCreate} onOpenChange={setShowCreate}>
+          <Dialog open={showCreate} onOpenChange={(open) => { setShowCreate(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="h-4 w-4 mr-1" />New Campaign
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
               <DialogHeader>
                 <DialogTitle>Create Broadcast Campaign</DialogTitle>
-                <DialogDescription>Select a template and filter contacts to create a campaign</DialogDescription>
+                <DialogDescription>Select a template, pick contacts, and send</DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 mt-4">
+              <div className="space-y-4 mt-2 overflow-y-auto flex-1 pr-1">
+                {/* Campaign Name */}
                 <div>
                   <Label>Campaign Name</Label>
                   <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Diwali Sale 2026" />
                 </div>
 
+                {/* Template */}
                 <div>
                   <Label>Template (Approved Only)</Label>
                   <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
@@ -294,62 +366,111 @@ export default function Campaigns() {
                   )}
                 </div>
 
-                {/* Category Filter */}
-                {allCategories.length > 0 && (
-                  <div>
-                    <Label>Filter by Category (optional)</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {allCategories.map(cat => (
-                        <label key={cat} className="flex items-center gap-1.5 text-sm cursor-pointer">
-                          <Checkbox
-                            checked={selectedCategories.includes(cat)}
-                            onCheckedChange={(checked) => {
-                              setSelectedCategories(prev =>
-                                checked ? [...prev, cat] : prev.filter(c => c !== cat)
-                              );
-                            }}
-                          />
-                          {cat}
-                        </label>
-                      ))}
+                {/* Category Quick Select */}
+                <div>
+                  <Label className="mb-2 block">Quick Select by Category</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(allCategories).map(([cat, count]) => (
+                      <Button
+                        key={cat}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-7"
+                        onClick={() => selectByCategory(cat)}
+                      >
+                        📁 {cat} <Badge variant="secondary" className="ml-1 text-[10px] px-1">{count}</Badge>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Contact Selection */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Select Contacts ({selectedContactIds.size} selected)</Label>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="text-xs h-7" onClick={selectAllVisible}>
+                        Select All ({filteredContacts.length})
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-xs h-7" onClick={deselectAllVisible}>
+                        Deselect All
+                      </Button>
                     </div>
                   </div>
-                )}
 
-                {/* Tag Filter */}
-                {allTags.length > 0 && (
-                  <div>
-                    <Label>Filter by Tags (optional)</Label>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {allTags.map(tag => (
-                        <label key={tag} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                  {/* Search & Filter */}
+                  <div className="flex gap-2 mb-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search name or phone..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+                    <Select value={filterCategory} onValueChange={setFilterCategory}>
+                      <SelectTrigger className="w-[160px] h-9">
+                        <SelectValue placeholder="All categories" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {Object.entries(allCategories).map(([cat, count]) => (
+                          <SelectItem key={cat} value={cat}>{cat} ({count})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Contact List */}
+                  <ScrollArea className="h-[240px] border rounded-md">
+                    <div className="p-1">
+                      {/* Header checkbox */}
+                      <label className="flex items-center gap-2 p-2 border-b bg-muted/50 rounded-t-md cursor-pointer sticky top-0 z-10">
+                        <Checkbox
+                          checked={allVisibleSelected}
+                          onCheckedChange={(checked) => checked ? selectAllVisible() : deselectAllVisible()}
+                        />
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {allVisibleSelected ? 'Deselect' : 'Select'} all {filteredContacts.length} shown
+                        </span>
+                      </label>
+                      {filteredContacts.map(contact => (
+                        <label
+                          key={contact.id}
+                          className="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer border-b border-border/50 last:border-0"
+                        >
                           <Checkbox
-                            checked={selectedTags.includes(tag)}
-                            onCheckedChange={(checked) => {
-                              setSelectedTags(prev =>
-                                checked ? [...prev, tag] : prev.filter(t => t !== tag)
-                              );
-                            }}
+                            checked={selectedContactIds.has(contact.id)}
+                            onCheckedChange={() => toggleContact(contact.id)}
                           />
-                          {tag}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{contact.name || contact.phone}</p>
+                            <p className="text-xs text-muted-foreground">{contact.phone}</p>
+                          </div>
+                          {contact.category && (
+                            <Badge variant="outline" className="text-[10px] shrink-0">{contact.category}</Badge>
+                          )}
                         </label>
                       ))}
+                      {filteredContacts.length === 0 && (
+                        <p className="text-center text-sm text-muted-foreground py-8">No contacts found</p>
+                      )}
                     </div>
-                  </div>
-                )}
+                  </ScrollArea>
+                </div>
 
+                {/* Summary */}
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-sm font-medium flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    {selectedCategories.length === 0 && selectedTags.length === 0
-                      ? `All ${contacts.length} contacts will receive this message`
-                      : `${filteredContactCount} contacts match your filters`}
+                    {selectedContactIds.size} contacts selected for this campaign
                   </p>
                 </div>
 
-                <Button onClick={handleCreate} disabled={creating} className="w-full">
+                <Button onClick={handleCreate} disabled={creating || selectedContactIds.size === 0} className="w-full">
                   {creating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                  Create Campaign ({filteredContactCount || contacts.length} recipients)
+                  Create Campaign ({selectedContactIds.size} recipients)
                 </Button>
               </div>
             </DialogContent>
@@ -367,7 +488,7 @@ export default function Campaigns() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-green-600">
+            <p className="text-2xl font-bold text-primary">
               {campaigns.filter(c => c.status === 'completed').length}
             </p>
             <p className="text-xs text-muted-foreground">Completed</p>
@@ -375,7 +496,7 @@ export default function Campaigns() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">
+            <p className="text-2xl font-bold text-primary">
               {campaigns.reduce((s, c) => s + (c.sent_count || 0), 0)}
             </p>
             <p className="text-xs text-muted-foreground">Messages Sent</p>
@@ -383,7 +504,7 @@ export default function Campaigns() {
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-red-600">
+            <p className="text-2xl font-bold text-destructive">
               {campaigns.reduce((s, c) => s + (c.failed_count || 0), 0)}
             </p>
             <p className="text-xs text-muted-foreground">Failed</p>
@@ -418,16 +539,6 @@ export default function Campaigns() {
                     <p className="text-sm text-muted-foreground">
                       Template: <span className="font-mono">{campaign.template_name}</span> • {campaign.total_recipients} recipients
                     </p>
-                    {(campaign.filter_categories?.length > 0 || campaign.filter_tags?.length > 0) && (
-                      <div className="flex gap-1 flex-wrap">
-                        {campaign.filter_categories?.map(c => (
-                          <Badge key={c} variant="outline" className="text-[10px]">📁 {c}</Badge>
-                        ))}
-                        {campaign.filter_tags?.map(t => (
-                          <Badge key={t} variant="outline" className="text-[10px]">🏷️ {t}</Badge>
-                        ))}
-                      </div>
-                    )}
                     <div className="flex gap-3 text-xs text-muted-foreground">
                       <span>✅ Sent: {campaign.sent_count || 0}</span>
                       <span>❌ Failed: {campaign.failed_count || 0}</span>
@@ -481,14 +592,14 @@ export default function Campaigns() {
                   <span className="text-muted-foreground ml-2">{r.phone}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {r.status === 'sent' && <Badge className="bg-green-600 text-[10px]">Sent</Badge>}
+                  {r.status === 'sent' && <Badge variant="default" className="text-[10px]">Sent</Badge>}
                   {r.status === 'pending' && <Badge variant="secondary" className="text-[10px]">Pending</Badge>}
                   {r.status === 'failed' && (
                     <Badge variant="destructive" className="text-[10px]" title={r.error_message || ''}>
                       Failed
                     </Badge>
                   )}
-                  {r.status === 'delivered' && <Badge className="bg-blue-600 text-[10px]">Delivered</Badge>}
+                  {r.status === 'delivered' && <Badge variant="default" className="text-[10px]">Delivered</Badge>}
                 </div>
               </div>
             ))}

@@ -25,6 +25,39 @@ interface WhatsAppBusinessAccount {
   };
 }
 
+// Subscribe app to WABA webhooks so we receive incoming messages
+async function subscribeAppToWaba(wabaId: string, accessToken: string, supabaseUrl?: string) {
+  try {
+    const webhookUrl = supabaseUrl 
+      ? `${supabaseUrl}/functions/v1/meta-webhook`
+      : undefined
+
+    const body: Record<string, string> = {}
+    if (webhookUrl) {
+      body.override_callback_uri = webhookUrl
+      body.verify_token = Deno.env.get('WEBHOOK_VERIFY_TOKEN') || ''
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v23.0/${wabaId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    )
+    const result = await response.json()
+    console.log(`[Webhook Sub] WABA ${wabaId} subscription result:`, JSON.stringify(result))
+    return result
+  } catch (error) {
+    console.error(`[Webhook Sub] Failed to subscribe WABA ${wabaId}:`, error)
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -309,8 +342,6 @@ Deno.serve(async (req) => {
       }
 
       // CRITICAL: Update access token for ALL numbers under the same WABAs
-      // This ensures when user reconnects, ALL numbers from same WABA get updated (regardless of app user_id)
-      // Meta tokens are shared at WABA level, not individual phone level
       if (allWabaIds.length > 0) {
         console.log(`[OAuth] Updating tokens for all numbers in WABAs: ${allWabaIds.join(', ')}`)
         const { error: updateError, count } = await supabase
@@ -329,6 +360,11 @@ Deno.serve(async (req) => {
           console.error('[OAuth] Failed to update tokens for related numbers:', updateError)
         } else {
           console.log(`[OAuth] Updated tokens for ${count || 0} related numbers`)
+        }
+
+        // Subscribe app to each WABA's webhooks
+        for (const wabaId of allWabaIds) {
+          await subscribeAppToWaba(wabaId, accessToken, SUPABASE_URL)
         }
       }
 
@@ -556,6 +592,11 @@ Deno.serve(async (req) => {
         if (updateError) {
           console.error('[OAuth] Failed to update tokens for related numbers:', updateError)
         }
+
+        // Subscribe app to each WABA's webhooks
+        for (const wabaId of allWabaIds) {
+          await subscribeAppToWaba(wabaId, accessToken, SUPABASE_URL)
+        }
       }
 
       return new Response(JSON.stringify({ 
@@ -754,6 +795,11 @@ Deno.serve(async (req) => {
             updated_at: new Date().toISOString()
           })
           .in('waba_id', allWabaIds)
+
+        // Subscribe app to each WABA's webhooks
+        for (const wabaId of allWabaIds) {
+          await subscribeAppToWaba(wabaId, accessToken, SUPABASE_URL)
+        }
       }
 
       return new Response(JSON.stringify({ 
@@ -824,6 +870,44 @@ Deno.serve(async (req) => {
       }).eq('id', whatsapp_number_id)
 
       return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Subscribe webhooks manually for existing accounts
+    if (action === 'subscribe-webhooks') {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        })
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const token = authHeader.replace('Bearer ', '')
+      const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token)
+      if (claimsError || !claimsData.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        })
+      }
+
+      // Get all active WABA accounts for this user
+      const { data: numbers } = await supabase
+        .from('whatsapp_numbers')
+        .select('waba_id, access_token')
+        .eq('status', 'active')
+
+      const results: Record<string, unknown> = {}
+      const seenWabas = new Set<string>()
+      
+      for (const num of numbers || []) {
+        if (seenWabas.has(num.waba_id)) continue
+        seenWabas.add(num.waba_id)
+        results[num.waba_id] = await subscribeAppToWaba(num.waba_id, num.access_token, SUPABASE_URL)
+      }
+
+      return new Response(JSON.stringify({ success: true, results }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }

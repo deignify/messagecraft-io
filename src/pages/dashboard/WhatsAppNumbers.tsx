@@ -325,7 +325,7 @@ export default function WhatsAppNumbers() {
 
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v21.0/${number.phone_number_id}`,
+        `https://graph.facebook.com/v23.0/${number.phone_number_id}`,
         {
           headers: { 'Authorization': `Bearer ${number.access_token}` }
         }

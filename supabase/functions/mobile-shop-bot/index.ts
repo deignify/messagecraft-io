@@ -1058,6 +1058,11 @@ Deno.serve(async (req) => {
             `💳 Payment: Pending Verification\n\n` +
             `⚠️ Payment screenshot received. Please verify and update order status.`
           await sendWhatsAppMessage(phone_number_id, access_token, shop.agent_notify_phone, agentMsg)
+
+          // Forward the payment screenshot to admin
+          if (body.media_info?.id) {
+            await forwardMediaToAdmin(phone_number_id, access_token, shop.agent_notify_phone, body.media_info)
+          }
         }
 
         responseText = `✅ *Order Placed Successfully!*\n\n` +
@@ -1341,5 +1346,39 @@ async function notifyAgent(
       `Customer has been informed that an agent will contact them.\n\n` +
       `Please contact the customer and help them find an alternative or confirm availability.`
     await sendWhatsAppMessage(phoneNumberId, accessToken, shop.agent_notify_phone, agentMsg)
+  }
+}
+
+async function forwardMediaToAdmin(
+  phoneNumberId: string, accessToken: string, adminPhone: string,
+  mediaInfo: { type: string; id: string; mime_type: string }
+) {
+  try {
+    const mediaType = mediaInfo.mime_type?.startsWith('image') ? 'image' : 'document'
+    const payload: any = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: adminPhone,
+      type: mediaType,
+    }
+    if (mediaType === 'image') {
+      payload.image = { id: mediaInfo.id, caption: '💳 Payment Screenshot' }
+    } else {
+      payload.document = { id: mediaInfo.id, caption: '💳 Payment Document' }
+    }
+
+    const response = await fetch(
+      `https://graph.facebook.com/v23.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    )
+    if (!response.ok) {
+      console.error('Forward media error:', await response.json())
+    }
+  } catch (error) {
+    console.error('Forward media to admin error:', error)
   }
 }

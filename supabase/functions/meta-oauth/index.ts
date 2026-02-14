@@ -97,18 +97,25 @@ Deno.serve(async (req) => {
         })
       )
 
-      // Meta OAuth URL with WhatsApp Business Management scope
-      const authUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth')
+      // Meta OAuth URL with proper scopes including business_management
+      const authUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth')
       authUrl.searchParams.set('client_id', META_APP_ID)
       authUrl.searchParams.set('redirect_uri', callbackUri)
       authUrl.searchParams.set('state', state)
-      authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
+      authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging')
       authUrl.searchParams.set('response_type', 'code')
       
-      // For Business App type, add config_id for embedded signup
+      // For Business App type, add config_id and featureType for embedded signup
       const configId = url.searchParams.get('config_id')
-      if (accountType === 'business_app' && configId) {
-        authUrl.searchParams.set('config_id', configId)
+      const externalBusinessId = url.searchParams.get('external_business_id')
+      if (accountType === 'business_app') {
+        authUrl.searchParams.set('feature_type', 'whatsapp_business_app_onboarding')
+        if (configId) {
+          authUrl.searchParams.set('config_id', configId)
+        }
+        if (externalBusinessId) {
+          authUrl.searchParams.set('setup.external_business_id', externalBusinessId)
+        }
         authUrl.searchParams.set('override_default_response_type', 'true')
       }
 
@@ -148,7 +155,7 @@ Deno.serve(async (req) => {
       const callbackUri = `https://${url.hostname}/functions/v1/meta-oauth`
 
       // Exchange code for access token
-      const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      const tokenUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       tokenUrl.searchParams.set('client_id', META_APP_ID)
       tokenUrl.searchParams.set('client_secret', META_APP_SECRET)
       tokenUrl.searchParams.set('redirect_uri', callbackUri)
@@ -168,7 +175,7 @@ Deno.serve(async (req) => {
       }
 
       // Get long-lived token
-      const longLivedUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      const longLivedUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       longLivedUrl.searchParams.set('grant_type', 'fb_exchange_token')
       longLivedUrl.searchParams.set('client_id', META_APP_ID)
       longLivedUrl.searchParams.set('client_secret', META_APP_SECRET)
@@ -182,7 +189,7 @@ Deno.serve(async (req) => {
 
       // Get WhatsApp Business Accounts
       const wabaResponse = await fetch(
-        `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+        `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
       const wabaData = await wabaResponse.json()
@@ -335,17 +342,24 @@ Deno.serve(async (req) => {
         })
       )
 
-      // Meta OAuth URL with WhatsApp Business Management scope
-      const authUrl = new URL('https://www.facebook.com/v22.0/dialog/oauth')
+      // Meta OAuth URL with proper scopes including business_management
+      const authUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth')
       authUrl.searchParams.set('client_id', META_APP_ID)
       authUrl.searchParams.set('redirect_uri', redirectUri)
       authUrl.searchParams.set('state', stateValue)
-      authUrl.searchParams.set('scope', 'whatsapp_business_management,whatsapp_business_messaging')
+      authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging')
       authUrl.searchParams.set('response_type', 'code')
       
-      // For Business App type, add config_id for embedded signup
-      if (accountType === 'business_app' && configId) {
-        authUrl.searchParams.set('config_id', configId)
+      // For Business App type, add config_id and featureType for embedded signup
+      const externalBusinessId = body.external_business_id
+      if (accountType === 'business_app') {
+        authUrl.searchParams.set('feature_type', 'whatsapp_business_app_onboarding')
+        if (configId) {
+          authUrl.searchParams.set('config_id', configId)
+        }
+        if (externalBusinessId) {
+          authUrl.searchParams.set('setup.external_business_id', externalBusinessId)
+        }
         authUrl.searchParams.set('override_default_response_type', 'true')
       }
 
@@ -377,7 +391,7 @@ Deno.serve(async (req) => {
       }
 
       // Exchange code for access token
-      const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      const tokenUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       tokenUrl.searchParams.set('client_id', META_APP_ID)
       tokenUrl.searchParams.set('client_secret', META_APP_SECRET)
       tokenUrl.searchParams.set('redirect_uri', redirect_uri)
@@ -392,7 +406,7 @@ Deno.serve(async (req) => {
       }
 
       // Get long-lived token
-      const longLivedUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      const longLivedUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       longLivedUrl.searchParams.set('grant_type', 'fb_exchange_token')
       longLivedUrl.searchParams.set('client_id', META_APP_ID)
       longLivedUrl.searchParams.set('client_secret', META_APP_SECRET)
@@ -406,7 +420,7 @@ Deno.serve(async (req) => {
 
       // Get WhatsApp Business Accounts
       const wabaResponse = await fetch(
-        `https://graph.facebook.com/v21.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+        `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       )
       const wabaData = await wabaResponse.json()
@@ -534,7 +548,7 @@ Deno.serve(async (req) => {
       }
 
       // Refresh the token
-      const refreshUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token')
+      const refreshUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       refreshUrl.searchParams.set('grant_type', 'fb_exchange_token')
       refreshUrl.searchParams.set('client_id', META_APP_ID)
       refreshUrl.searchParams.set('client_secret', META_APP_SECRET)

@@ -174,10 +174,10 @@ export function useMobileShopSheet() {
     }
   }, [selectedNumber]);
 
-  const updateOrder = useCallback(async (rowIndex: number, values: string[]) => {
+  const updateOrder = useCallback(async (rowIndex: number, values: string[], previousStatus?: string) => {
     if (!selectedNumber) return;
     try {
-      await callShopApi('update-order', selectedNumber.id, { row_index: rowIndex, values });
+      await callShopApi('update-order', selectedNumber.id, { row_index: rowIndex, values, previous_status: previousStatus });
       toast.success('Order updated!');
       await fetchOrders();
     } catch (e: any) {

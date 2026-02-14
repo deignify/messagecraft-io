@@ -68,11 +68,25 @@ export interface SheetOrder {
   notes: string;
 }
 
+export interface SheetShopDetails {
+  name: string;
+  description: string;
+  language: string;
+  owner_phone: string;
+  agent_notify_phone: string;
+  upi_id: string;
+  advance_amount_min: string;
+  advance_amount_max: string;
+  welcome_message: string;
+  is_active: string;
+}
+
 export function useMobileShopSheet() {
   const { selectedNumber } = useWhatsApp();
   const [branches, setBranches] = useState<SheetBranch[]>([]);
   const [products, setProducts] = useState<SheetProduct[]>([]);
   const [orders, setOrders] = useState<SheetOrder[]>([]);
+  const [shopDetails, setShopDetails] = useState<SheetShopDetails | null>(null);
   const [loading, setLoading] = useState(false);
 
   const syncShopDetails = useCallback(async () => {
@@ -80,6 +94,42 @@ export function useMobileShopSheet() {
     try {
       await callShopApi('sync-shop-details', selectedNumber.id);
       toast.success('Shop details synced to Google Sheet!');
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  }, [selectedNumber]);
+
+  const fetchShopDetails = useCallback(async () => {
+    if (!selectedNumber) return;
+    setLoading(true);
+    try {
+      const data = await callShopApi('get-shop-details', selectedNumber.id);
+      const d = data.details || {};
+      setShopDetails({
+        name: d['Shop Name'] || '',
+        description: d['Description'] || '',
+        language: d['Language'] || 'hinglish',
+        owner_phone: d['Owner Phone'] || '',
+        agent_notify_phone: d['Agent Notify Phone'] || '',
+        upi_id: d['UPI ID'] || '',
+        advance_amount_min: d['Advance Min'] || '1000',
+        advance_amount_max: d['Advance Max'] || '2000',
+        welcome_message: d['Welcome Message'] || '',
+        is_active: d['Is Active'] || 'Yes',
+      });
+    } catch (e: any) {
+      // Sheet may not exist yet, that's ok
+      console.log('Could not fetch shop details from sheet:', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedNumber]);
+
+  const updateShopDetails = useCallback(async (settings: Record<string, unknown>) => {
+    if (!selectedNumber) return;
+    try {
+      await callShopApi('update-shop-details', selectedNumber.id, { settings });
+      toast.success('Shop details updated in Google Sheet & database!');
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -136,7 +186,8 @@ export function useMobileShopSheet() {
   }, [selectedNumber, fetchOrders]);
 
   return {
-    branches, products, orders, loading,
-    syncShopDetails, fetchBranches, fetchProducts, fetchOrders, updateOrder,
+    branches, products, orders, shopDetails, loading,
+    syncShopDetails, fetchShopDetails, updateShopDetails,
+    fetchBranches, fetchProducts, fetchOrders, updateOrder,
   };
 }

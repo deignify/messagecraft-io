@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useWhatsApp } from '@/contexts/WhatsAppContext';
 import { useMobileShop, type MobileShop } from '@/hooks/useMobileShop';
-import { useMobileShopSheet, type SheetBranch, type SheetProduct, type SheetOrder } from '@/hooks/useMobileShopSheet';
+import { useMobileShopSheet, type SheetBranch, type SheetProduct, type SheetOrder, type SheetShopDetails } from '@/hooks/useMobileShopSheet';
 import {
   Smartphone, Store, MapPin, Settings, Loader2, ArrowLeft,
   Save, FileSpreadsheet, RefreshCw, Package, ShoppingCart, MessageCircle,
@@ -21,38 +21,97 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 // ===== SHOP SETUP TAB =====
-function ShopSetup({ shop, onCreateOrUpdate, onSyncToSheet }: {
+function ShopSetup({ shop, sheetDetails, onCreateOrUpdate, onSyncToSheet, onUpdateSheetDetails, onFetchSheetDetails }: {
   shop: MobileShop | null;
+  sheetDetails: SheetShopDetails | null;
   onCreateOrUpdate: (data: Partial<MobileShop>) => Promise<void>;
   onSyncToSheet: () => Promise<void>;
+  onUpdateSheetDetails: (settings: Record<string, unknown>) => Promise<void>;
+  onFetchSheetDetails: () => Promise<void>;
 }) {
   const [form, setForm] = useState<Partial<MobileShop>>({
-    name: shop?.name || '',
-    description: shop?.description || '',
-    owner_phone: shop?.owner_phone || '',
-    language: shop?.language || 'hinglish',
-    welcome_message: shop?.welcome_message || '',
-    advance_amount_min: shop?.advance_amount_min || 1000,
-    advance_amount_max: shop?.advance_amount_max || 2000,
-    upi_id: shop?.upi_id || '',
-    google_sheet_id: shop?.google_sheet_id || '',
-    agent_notify_phone: shop?.agent_notify_phone || '',
+    name: '',
+    description: '',
+    owner_phone: '',
+    language: 'hinglish',
+    welcome_message: '',
+    advance_amount_min: 1000,
+    advance_amount_max: 2000,
+    upi_id: '',
+    google_sheet_id: '',
+    agent_notify_phone: '',
   });
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [loadingFromSheet, setLoadingFromSheet] = useState(false);
+
+  // Load from sheet details if available, otherwise from DB shop
+  useEffect(() => {
+    if (sheetDetails && sheetDetails.name) {
+      setForm({
+        name: sheetDetails.name,
+        description: sheetDetails.description,
+        owner_phone: sheetDetails.owner_phone,
+        language: sheetDetails.language || 'hinglish',
+        welcome_message: sheetDetails.welcome_message,
+        advance_amount_min: parseInt(sheetDetails.advance_amount_min) || 1000,
+        advance_amount_max: parseInt(sheetDetails.advance_amount_max) || 2000,
+        upi_id: sheetDetails.upi_id,
+        google_sheet_id: shop?.google_sheet_id || '',
+        agent_notify_phone: sheetDetails.agent_notify_phone,
+      });
+    } else if (shop) {
+      setForm({
+        name: shop.name || '',
+        description: shop.description || '',
+        owner_phone: shop.owner_phone || '',
+        language: shop.language || 'hinglish',
+        welcome_message: shop.welcome_message || '',
+        advance_amount_min: shop.advance_amount_min || 1000,
+        advance_amount_max: shop.advance_amount_max || 2000,
+        upi_id: shop.upi_id || '',
+        google_sheet_id: shop.google_sheet_id || '',
+        agent_notify_phone: shop.agent_notify_phone || '',
+      });
+    }
+  }, [sheetDetails, shop]);
 
   const handleSave = async () => {
     if (!form.name) { toast.error('Shop name is required'); return; }
     setSaving(true);
     try {
-      await onCreateOrUpdate(form);
+      if (!shop) {
+        await onCreateOrUpdate(form);
+      } else {
+        // Update both DB and Google Sheet
+        await onCreateOrUpdate({ google_sheet_id: form.google_sheet_id });
+        await onUpdateSheetDetails({
+          name: form.name,
+          description: form.description,
+          language: form.language,
+          owner_phone: form.owner_phone,
+          agent_notify_phone: form.agent_notify_phone,
+          upi_id: form.upi_id,
+          advance_amount_min: form.advance_amount_min,
+          advance_amount_max: form.advance_amount_max,
+          welcome_message: form.welcome_message,
+        });
+      }
     } finally { setSaving(false); }
+  };
+
+  const handleLoadFromSheet = async () => {
+    setLoadingFromSheet(true);
+    try {
+      await onFetchSheetDetails();
+      toast.success('Loaded latest data from Google Sheet!');
+    } finally { setLoadingFromSheet(false); }
   };
 
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await handleSave();
+      await onCreateOrUpdate(form);
       await onSyncToSheet();
     } finally { setSyncing(false); }
   };
@@ -132,13 +191,19 @@ function ShopSetup({ shop, onCreateOrUpdate, onSyncToSheet }: {
       <div className="flex gap-3">
         <Button onClick={handleSave} disabled={saving} className="flex-1">
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-          {shop ? 'Update Shop' : 'Create Shop'}
+          {shop ? 'Save & Sync to Sheet' : 'Create Shop'}
         </Button>
         {shop && shop.google_sheet_id && (
-          <Button onClick={handleSync} disabled={syncing} variant="secondary">
-            {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Sync to Sheet
-          </Button>
+          <>
+            <Button onClick={handleLoadFromSheet} disabled={loadingFromSheet} variant="outline">
+              {loadingFromSheet ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Load from Sheet
+            </Button>
+            <Button onClick={handleSync} disabled={syncing} variant="secondary">
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSpreadsheet className="h-4 w-4 mr-2" />}
+              Overwrite Sheet
+            </Button>
+          </>
         )}
       </div>
     </div>
@@ -538,13 +603,16 @@ export default function MobileShopAutomation() {
   const { shop, loading, createShop, updateShop } = useMobileShop();
   const {
     branches: sheetBranches, products: sheetProducts, orders: sheetOrders,
-    loading: sheetLoading, syncShopDetails, fetchBranches, fetchProducts, fetchOrders, updateOrder
+    shopDetails: sheetDetails, loading: sheetLoading,
+    syncShopDetails, fetchShopDetails, updateShopDetails,
+    fetchBranches, fetchProducts, fetchOrders, updateOrder
   } = useMobileShopSheet();
   const [activeTab, setActiveTab] = useState('setup');
 
   // Auto-fetch data when tab changes
   useEffect(() => {
     if (!shop?.google_sheet_id) return;
+    if (activeTab === 'setup') fetchShopDetails();
     if (activeTab === 'branches') fetchBranches();
     if (activeTab === 'products') fetchProducts();
     if (activeTab === 'orders') fetchOrders();
@@ -616,8 +684,11 @@ export default function MobileShopAutomation() {
         <TabsContent value="setup">
           <ShopSetup
             shop={shop}
+            sheetDetails={sheetDetails}
             onCreateOrUpdate={shop ? updateShop : createShop}
             onSyncToSheet={syncShopDetails}
+            onUpdateSheetDetails={updateShopDetails}
+            onFetchSheetDetails={fetchShopDetails}
           />
         </TabsContent>
         <TabsContent value="branches">

@@ -541,11 +541,11 @@ Deno.serve(async (req) => {
       }
 
       // Exchange code for access token - JS SDK codes don't need redirect_uri
+      // Important: completely omit redirect_uri for JS SDK codes (don't send empty string)
       const tokenUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
       tokenUrl.searchParams.set('client_id', META_APP_ID)
       tokenUrl.searchParams.set('client_secret', META_APP_SECRET)
       tokenUrl.searchParams.set('code', code)
-      tokenUrl.searchParams.set('redirect_uri', '') // empty for JS SDK
 
       const tokenResponse = await fetch(tokenUrl.toString())
       const tokenData: MetaTokenResponse = await tokenResponse.json()

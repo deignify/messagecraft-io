@@ -66,6 +66,7 @@ export default function LiveChat() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -181,6 +182,8 @@ export default function LiveChat() {
   useEffect(() => {
     if (!selectedConversation) {
       setMessages([]);
+      setIsTyping(false);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       return;
     }
 
@@ -212,6 +215,7 @@ export default function LiveChat() {
             // Simulate typing indicator for inbound messages
             if ((payload.new as Message).direction === 'inbound') {
               setIsTyping(false);
+              if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             }
           } else if (payload.eventType === 'UPDATE') {
             setMessages((prev) =>
@@ -337,6 +341,10 @@ export default function LiveChat() {
       } else {
         setNewMessage('');
         clearSelectedFile();
+        // Show typing indicator until bot/server reply arrives (max 10s)
+        setIsTyping(true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 10000);
       }
     } catch (error) {
       console.error('Error sending message:', error);

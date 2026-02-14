@@ -856,26 +856,66 @@ Deno.serve(async (req) => {
           responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${branches[0].name}*\n📍 ${branches[0].address}`
           newState = 'collect_pickup_date'
         } else {
-          listBody = '🏪 *Pickup branch select karein:*'
-          listButtonText = 'Select Branch'
-          listSections = [{
-            title: 'Our Branches',
-            rows: branches.map((b, i) => ({
-              id: `branch_${i}`,
-              title: b.name,
-              description: `${b.address}, ${b.city}`,
-            })),
-          }]
-          useInteractiveList = true
-          session.data.branches_list = branches.map(b => b.name)
-          newState = 'choose_branch'
+          // Try to auto-match branch by city
+          const cityMatch = branches.find(b => fuzzyMatch(originalMsg.toLowerCase(), b.city.toLowerCase()))
+          if (cityMatch) {
+            // Auto-select branch matching city
+            session.data.selected_branch = cityMatch.name
+            session.data.branch_upi = cityMatch.upi_id
+            responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${cityMatch.name}*\n📍 ${cityMatch.address}, ${cityMatch.city}`
+            newState = 'collect_pickup_date'
+          } else {
+            // Show all branches as list with text fallback
+            const branchTextList = branches.map((b, i) => `${i + 1}. *${b.name}*\n   📍 ${b.address}, ${b.city}`).join('\n\n')
+            responseText = `🏪 *Pickup branch select karein:*\n\n${branchTextList}\n\n_Number type karein ya list se select karein_`
+            listBody = '🏪 *Pickup branch select karein:*'
+            listButtonText = 'Select Branch'
+            listSections = [{
+              title: 'Our Branches',
+              rows: branches.map((b, i) => ({
+                id: `branch_${i}`,
+                title: b.name.substring(0, 24),
+                description: `${b.address}, ${b.city}`.substring(0, 72),
+              })),
+            }]
+            useInteractiveList = true
+            session.data.branches_list = branches.map(b => b.name)
+            newState = 'choose_branch'
+          }
         }
       }
     }
     // ===== CHOOSE BRANCH =====
     else if (session.state === 'choose_branch') {
       const branchesList = (session.data.branches_list as string[]) || branches.map(b => b.name)
-      const selectedBranchName = resolveSelection(msg, originalMsg, replyId, 'branch', branchesList)
+      let selectedBranchName = resolveSelection(msg, originalMsg, replyId, 'branch', branchesList)
+
+      // Also try matching by number (1, 2, 3...)
+      if (!selectedBranchName) {
+        const numMatch = msg.match(/^(\d+)$/)
+        if (numMatch) {
+          const idx = parseInt(numMatch[1]) - 1
+          if (idx >= 0 && idx < branchesList.length) {
+            selectedBranchName = branchesList[idx]
+          }
+        }
+      }
+
+      // Also try matching by city name
+      if (!selectedBranchName) {
+        const cityMatchBranch = branches.find(b => fuzzyMatch(originalMsg.toLowerCase(), b.city.toLowerCase()))
+        if (cityMatchBranch) {
+          selectedBranchName = cityMatchBranch.name
+        }
+      }
+
+      // Also try matching by partial branch name
+      if (!selectedBranchName) {
+        const partialMatch = branches.find(b => fuzzyMatch(originalMsg.toLowerCase(), b.name.toLowerCase()))
+        if (partialMatch) {
+          selectedBranchName = partialMatch.name
+        }
+      }
 
       if (selectedBranchName) {
         const branch = branches.find(b => b.name === selectedBranchName)!
@@ -884,7 +924,8 @@ Deno.serve(async (req) => {
         responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${selectedBranchName}*\n📍 ${branch.address}`
         newState = 'collect_pickup_date'
       } else {
-        responseText = '❌ Branch nahi mila. List se select karein.'
+        const branchTextList = branches.map((b, i) => `${i + 1}. *${b.name}* - ${b.city}`).join('\n')
+        responseText = `❌ Branch nahi mila. Kripya number type karein:\n\n${branchTextList}`
       }
     }
     // ===== COLLECT PICKUP DATE =====
@@ -990,8 +1031,16 @@ Deno.serve(async (req) => {
     let waMessageId: string | undefined
     if (useInteractiveList && listSections.length > 0) {
       const result = await sendWhatsAppInteractiveList(phone_number_id, access_token, from_phone, listBody, listButtonText, listSections)
-      waMessageId = result.waMessageId
-      await storeBotMessage(supabase, shop.user_id, null, whatsapp_number_id, from_phone, listBody, waMessageId)
+      if (result.success) {
+        waMessageId = result.waMessageId
+        await storeBotMessage(supabase, shop.user_id, null, whatsapp_number_id, from_phone, listBody, waMessageId)
+      } else if (responseText) {
+        // Fallback to text if list fails
+        console.log('Interactive list failed, falling back to text')
+        const fallbackResult = await sendWhatsAppMessage(phone_number_id, access_token, from_phone, responseText)
+        waMessageId = fallbackResult.waMessageId
+        await storeBotMessage(supabase, shop.user_id, null, whatsapp_number_id, from_phone, responseText, waMessageId)
+      }
     } else if (useInteractiveButtons && interactiveButtons.length > 0) {
       const result = await sendWhatsAppInteractiveButtons(phone_number_id, access_token, from_phone, responseText, interactiveButtons)
       waMessageId = result.waMessageId

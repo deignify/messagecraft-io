@@ -47,6 +47,15 @@ const automationTypes: AutomationType[] = [
     available: true,
   },
   {
+    id: 'mobile-shop',
+    name: 'Mobile Shop',
+    description: 'WhatsApp bot for mobile sales — browse brands, models, variants, place orders with Google Sheets integration',
+    icon: Store,
+    path: '/dashboard/automation/mobile-shop',
+    color: 'bg-emerald-500',
+    available: true,
+  },
+  {
     id: 'hospital',
     name: 'Hospital Automation',
     description: 'Appointment booking, doctor info, patient reminders, and medical inquiry management',
@@ -129,6 +138,22 @@ export default function Automation() {
     enabled: !!selectedNumber,
   });
 
+  // Check if mobile shop is configured
+  const { data: mobileShop } = useQuery({
+    queryKey: ['mobile_shop', selectedNumber?.id],
+    queryFn: async () => {
+      if (!selectedNumber) return null;
+      const { data, error } = await supabase
+        .from('mobile_shops')
+        .select('id, name, is_active')
+        .eq('whatsapp_number_id', selectedNumber.id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!selectedNumber,
+  });
+
   // Toggle hotel active status
   const toggleHotelMutation = useMutation({
     mutationFn: async (isActive: boolean) => {
@@ -142,6 +167,25 @@ export default function Automation() {
     onSuccess: (_, isActive) => {
       queryClient.invalidateQueries({ queryKey: ['hotel', selectedNumber?.id] });
       toast.success(isActive ? 'Hotel automation activated' : 'Hotel automation deactivated');
+    },
+    onError: () => {
+      toast.error('Failed to update automation status');
+    },
+  });
+
+  // Toggle mobile shop active status
+  const toggleShopMutation = useMutation({
+    mutationFn: async (isActive: boolean) => {
+      if (!mobileShop) throw new Error('No shop configured');
+      const { error } = await supabase
+        .from('mobile_shops')
+        .update({ is_active: isActive })
+        .eq('id', mobileShop.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, isActive) => {
+      queryClient.invalidateQueries({ queryKey: ['mobile_shop', selectedNumber?.id] });
+      toast.success(isActive ? 'Shop automation activated' : 'Shop automation deactivated');
     },
     onError: () => {
       toast.error('Failed to update automation status');
@@ -172,17 +216,18 @@ export default function Automation() {
   }
 
   const getAutomationStatus = (type: AutomationType) => {
-    if (type.id === 'hotel') {
-      if (hotel) {
-        return {
-          configured: true,
-          active: hotel.is_active,
-          name: hotel.name,
-        };
-      }
-      return { configured: false, active: false };
+    if (type.id === 'hotel' && hotel) {
+      return { configured: true, active: hotel.is_active, name: hotel.name };
+    }
+    if (type.id === 'mobile-shop' && mobileShop) {
+      return { configured: true, active: mobileShop.is_active, name: mobileShop.name };
     }
     return { configured: false, active: false };
+  };
+
+  const handleToggle = (typeId: string, checked: boolean) => {
+    if (typeId === 'hotel') toggleHotelMutation.mutate(checked);
+    if (typeId === 'mobile-shop') toggleShopMutation.mutate(checked);
   };
 
   return (
@@ -265,12 +310,8 @@ export default function Automation() {
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={status.active}
-                            onCheckedChange={(checked) => {
-                              if (type.id === 'hotel') {
-                                toggleHotelMutation.mutate(checked);
-                              }
-                            }}
-                            disabled={toggleHotelMutation.isPending}
+                            onCheckedChange={(checked) => handleToggle(type.id, checked)}
+                            disabled={toggleHotelMutation.isPending || toggleShopMutation.isPending}
                           />
                           <span className="text-sm text-muted-foreground">
                             {status.active ? 'Active' : 'Inactive'}

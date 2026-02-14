@@ -681,7 +681,7 @@ Deno.serve(async (req) => {
               responseText = getConfirmMessage(session.data, product)
               useInteractiveButtons = true
               interactiveButtons = [
-                { id: 'confirm_yes', title: '✅ Confirm Order' },
+                { id: 'confirm_yes', title: '✅ Confirm Model' },
                 { id: 'confirm_no', title: '❌ Cancel' },
               ]
               newState = 'confirm_product'
@@ -757,7 +757,7 @@ Deno.serve(async (req) => {
           responseText = getConfirmMessage(session.data, product)
           useInteractiveButtons = true
           interactiveButtons = [
-            { id: 'confirm_yes', title: '✅ Confirm Order' },
+            { id: 'confirm_yes', title: '✅ Confirm Model' },
             { id: 'confirm_no', title: '❌ Cancel' },
           ]
           newState = 'confirm_product'
@@ -803,7 +803,7 @@ Deno.serve(async (req) => {
           responseText = getConfirmMessage(session.data, product)
           useInteractiveButtons = true
           interactiveButtons = [
-            { id: 'confirm_yes', title: '✅ Confirm Order' },
+            { id: 'confirm_yes', title: '✅ Confirm Model' },
             { id: 'confirm_no', title: '❌ Cancel' },
           ]
           newState = 'confirm_product'
@@ -853,7 +853,9 @@ Deno.serve(async (req) => {
         } else if (branches.length === 1) {
           session.data.selected_branch = branches[0].name
           session.data.branch_upi = branches[0].upi_id
-          responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${branches[0].name}*\n📍 ${branches[0].address}`
+          responseText = getPickupDateMessage(branches[0].name, branches[0].address)
+          useInteractiveButtons = true
+          interactiveButtons = getPickupDateButtons()
           newState = 'collect_pickup_date'
         } else {
           // Try to auto-match branch by city
@@ -862,7 +864,9 @@ Deno.serve(async (req) => {
             // Auto-select branch matching city
             session.data.selected_branch = cityMatch.name
             session.data.branch_upi = cityMatch.upi_id
-            responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${cityMatch.name}*\n📍 ${cityMatch.address}, ${cityMatch.city}`
+            responseText = getPickupDateMessage(cityMatch.name, `${cityMatch.address}, ${cityMatch.city}`)
+            useInteractiveButtons = true
+            interactiveButtons = getPickupDateButtons()
             newState = 'collect_pickup_date'
           } else {
             // Show all branches as list with text fallback
@@ -921,7 +925,9 @@ Deno.serve(async (req) => {
         const branch = branches.find(b => b.name === selectedBranchName)!
         session.data.selected_branch = selectedBranchName
         session.data.branch_upi = branch.upi_id
-        responseText = `📅 *Pickup date batayein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_\n\nBranch: *${selectedBranchName}*\n📍 ${branch.address}`
+        responseText = getPickupDateMessage(selectedBranchName, branch.address)
+        useInteractiveButtons = true
+        interactiveButtons = getPickupDateButtons()
         newState = 'collect_pickup_date'
       } else {
         const branchTextList = branches.map((b, i) => `${i + 1}. *${b.name}* - ${b.city}`).join('\n')
@@ -930,6 +936,47 @@ Deno.serve(async (req) => {
     }
     // ===== COLLECT PICKUP DATE =====
     else if (session.state === 'collect_pickup_date') {
+      let parsed: string | null = null
+      
+      // Handle button selections
+      if (replyId === 'date_today' || msg === 'today' || msg === 'aaj' || msg === '1') {
+        parsed = formatDateDDMMYYYY(new Date())
+      } else if (replyId === 'date_tomorrow' || msg === 'tomorrow' || msg === 'kal' || msg === '2') {
+        const tomorrow = new Date()
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        parsed = formatDateDDMMYYYY(tomorrow)
+      } else if (replyId === 'date_custom' || msg === 'custom' || msg === '3') {
+        responseText = '📅 *Apni date likhein:*\n\n_Format: DD/MM/YYYY (jaise 15/02/2026)_'
+        newState = 'collect_pickup_date_custom'
+      } else {
+        // Try to parse as date directly
+        parsed = parseSimpleDate(originalMsg)
+        if (!parsed) {
+          responseText = '📅 Kripya button select karein ya DD/MM/YYYY format me date likhein.'
+          useInteractiveButtons = true
+          interactiveButtons = getPickupDateButtons()
+        }
+      }
+      
+      if (parsed) {
+        session.data.pickup_date = parsed
+        const advMin = shop.advance_amount_min || 1000
+        const advMax = shop.advance_amount_max || 2000
+        const upi = (session.data.branch_upi as string) || shop.upi_id || ''
+
+        let paymentMsg = `💰 *Order Finalize!*\n\n`
+        paymentMsg += `Advance amount: *${formatPrice(advMin)} - ${formatPrice(advMax)}*\n\n`
+        if (upi) {
+          paymentMsg += `📱 *UPI ID:* \`${upi}\`\n\n`
+        }
+        paymentMsg += `✅ Payment karne ke baad screenshot bhejein.\n\n`
+        paymentMsg += `_Screenshot send karein..._`
+        responseText = paymentMsg
+        newState = 'payment_screenshot'
+      }
+    }
+    // ===== COLLECT PICKUP DATE CUSTOM =====
+    else if (session.state === 'collect_pickup_date_custom') {
       const parsed = parseSimpleDate(originalMsg)
       if (!parsed) {
         responseText = '❌ Date format galat hai.\n\nDD/MM/YYYY likhein (jaise 15/02/2026)'
@@ -1205,13 +1252,42 @@ function getDefaultWelcome(shopName: string, language: string): string {
 }
 
 function getConfirmMessage(data: Record<string, unknown>, product: Product): string {
-  return `✅ *Order Summary:*\n\n` +
+  return `✅ *Product Summary:*\n\n` +
     `📱 *${data.selected_brand} ${data.selected_model}*\n` +
     `📦 Variant: ${data.selected_variant}\n` +
     `🎨 Color: ${data.selected_color}\n` +
     `💰 Price: ${formatPrice(product.price)}\n` +
     `📋 Type: ${(data.phone_type as string) === 'new' ? 'New' : 'Second Hand'}\n\n` +
-    `Kya aap order confirm karna chahte hai?`
+    `Kya aap ye model confirm karna chahte hai?`
+}
+
+function formatDateDDMMYYYY(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0')
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const y = date.getFullYear()
+  return `${d}/${m}/${y}`
+}
+
+function getPickupDateButtons(): { id: string; title: string }[] {
+  const today = new Date()
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return [
+    { id: 'date_today', title: `📅 Today` },
+    { id: 'date_tomorrow', title: `📅 Tomorrow` },
+    { id: 'date_custom', title: '📅 Other Date' },
+  ]
+}
+
+function getPickupDateMessage(branchName: string, branchAddress: string): string {
+  const today = new Date()
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return `📅 *Pickup date select karein:*\n\n` +
+    `1️⃣ Today (${formatDateDDMMYYYY(today)})\n` +
+    `2️⃣ Tomorrow (${formatDateDDMMYYYY(tomorrow)})\n` +
+    `3️⃣ Other Date\n\n` +
+    `🏪 Branch: *${branchName}*\n📍 ${branchAddress}`
 }
 
 function parseSimpleDate(input: string): string | null {

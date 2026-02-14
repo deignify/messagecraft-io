@@ -304,8 +304,8 @@ export function DashboardLayout() {
 
         {/* Page Content - extra padding bottom for mobile nav, none on chat page */}
         <main className={cn(
-          "flex-1 overflow-auto lg:pb-0",
-          location.pathname === '/dashboard/chat' ? "pb-0" : "pb-16"
+          "flex-1 lg:pb-0",
+          location.pathname === '/dashboard/chat' ? "pb-0 overflow-hidden" : "pb-16 overflow-auto"
         )}>
           <Outlet />
         </main>

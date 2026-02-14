@@ -387,7 +387,7 @@ function OrdersTab({ orders, loading, onRefresh, onUpdateOrder }: {
   orders: SheetOrder[];
   loading: boolean;
   onRefresh: () => void;
-  onUpdateOrder: (rowIndex: number, values: string[]) => Promise<void>;
+  onUpdateOrder: (rowIndex: number, values: string[], previousStatus?: string) => Promise<void>;
 }) {
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState('');
@@ -417,7 +417,7 @@ function OrdersTab({ orders, loading, onRefresh, onUpdateOrder }: {
       order.brand, order.model, order.variant, order.color, order.price,
       order.type, paymentStatus, newStatus, order.date, order.pickup_date, order.notes
     ];
-    await onUpdateOrder(order.index, values);
+    await onUpdateOrder(order.index, values, order.order_status);
   };
 
   const getStatusColor = (status: string) => {

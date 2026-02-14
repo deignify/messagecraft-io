@@ -323,12 +323,63 @@ Deno.serve(async (req) => {
 
     // ===== UPDATE ORDER STATUS =====
     if (action === 'update-order') {
-      const { row_index, values } = body
+      const { row_index, values, previous_status } = body
       if (!row_index || !values) {
         return new Response(JSON.stringify({ error: 'row_index and values required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
+
+      const newStatus = (values[12] || '').toLowerCase()
+      const prevStatus = (previous_status || '').toLowerCase()
+      const orderBrand = (values[5] || '').trim()
+      const orderModel = (values[6] || '').trim()
+      const orderVariant = (values[7] || '').trim()
+
+      // Stock management: confirm -> decrement, cancel confirmed -> restore
+      if (newStatus === 'confirmed' && prevStatus !== 'confirmed') {
+        const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
+        let productFound = false
+        for (let pi = 1; pi < productRows.length; pi++) {
+          const pRow = productRows[pi]
+          if ((pRow[0] || '').trim().toLowerCase() === orderBrand.toLowerCase() &&
+              (pRow[1] || '').trim().toLowerCase() === orderModel.toLowerCase() &&
+              (pRow[2] || '').trim().toLowerCase() === orderVariant.toLowerCase()) {
+            const currentStock = parseInt(pRow[5] || '0')
+            if (currentStock <= 0) {
+              return new Response(JSON.stringify({ error: `Product not available! ${orderBrand} ${orderModel} ${orderVariant} is out of stock.` }), {
+                status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              })
+            }
+            const newStock = currentStock - 1
+            pRow[5] = String(newStock)
+            if (newStock <= 0) pRow[7] = 'No'
+            await updateSheetRow(googleToken, shop.google_sheet_id, 'Products', pi, pRow)
+            console.log(`Stock decremented: ${orderBrand} ${orderModel} ${orderVariant} -> ${newStock}`)
+            productFound = true
+            break
+          }
+        }
+        if (!productFound) {
+          console.warn(`Product not found for stock update: ${orderBrand} ${orderModel} ${orderVariant}`)
+        }
+      } else if (newStatus === 'cancelled' && prevStatus === 'confirmed') {
+        const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
+        for (let pi = 1; pi < productRows.length; pi++) {
+          const pRow = productRows[pi]
+          if ((pRow[0] || '').trim().toLowerCase() === orderBrand.toLowerCase() &&
+              (pRow[1] || '').trim().toLowerCase() === orderModel.toLowerCase() &&
+              (pRow[2] || '').trim().toLowerCase() === orderVariant.toLowerCase()) {
+            const currentStock = parseInt(pRow[5] || '0')
+            pRow[5] = String(currentStock + 1)
+            pRow[7] = 'Yes'
+            await updateSheetRow(googleToken, shop.google_sheet_id, 'Products', pi, pRow)
+            console.log(`Stock restored: ${orderBrand} ${orderModel} ${orderVariant} -> ${currentStock + 1}`)
+            break
+          }
+        }
+      }
+
       const success = await updateSheetRow(googleToken, shop.google_sheet_id, 'Orders', row_index - 1, values)
       
       // Send WhatsApp notification to customer about status change

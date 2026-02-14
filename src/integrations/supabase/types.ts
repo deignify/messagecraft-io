@@ -214,6 +214,143 @@ export type Database = {
           },
         ]
       }
+      broadcast_campaigns: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          delivered_count: number | null
+          failed_count: number | null
+          filter_categories: string[] | null
+          filter_tags: string[] | null
+          id: string
+          name: string
+          read_count: number | null
+          scheduled_at: string | null
+          sent_count: number | null
+          started_at: string | null
+          status: string
+          template_language: string
+          template_name: string
+          template_params: Json | null
+          total_recipients: number | null
+          updated_at: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          delivered_count?: number | null
+          failed_count?: number | null
+          filter_categories?: string[] | null
+          filter_tags?: string[] | null
+          id?: string
+          name: string
+          read_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          template_language?: string
+          template_name: string
+          template_params?: Json | null
+          total_recipients?: number | null
+          updated_at?: string
+          user_id: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          delivered_count?: number | null
+          failed_count?: number | null
+          filter_categories?: string[] | null
+          filter_tags?: string[] | null
+          id?: string
+          name?: string
+          read_count?: number | null
+          scheduled_at?: string | null
+          sent_count?: number | null
+          started_at?: string | null
+          status?: string
+          template_language?: string
+          template_name?: string
+          template_params?: Json | null
+          total_recipients?: number | null
+          updated_at?: string
+          user_id?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      broadcast_recipients: {
+        Row: {
+          campaign_id: string
+          contact_id: string | null
+          contact_name: string | null
+          created_at: string
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          phone: string
+          read_at: string | null
+          sent_at: string | null
+          status: string
+          wa_message_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          phone: string
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
+          wa_message_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          contact_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          phone?: string
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_recipients_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "broadcast_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_recipients_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_assignments: {
         Row: {
           assigned_at: string

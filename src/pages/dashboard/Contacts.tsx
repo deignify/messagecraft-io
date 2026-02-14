@@ -349,19 +349,19 @@ export default function Contacts() {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">
+          <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">
             Contacts
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
             Manage your WhatsApp contacts and organize them by categories
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm">
             <Upload className="h-4 w-4" />
             Import CSV

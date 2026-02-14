@@ -86,55 +86,46 @@ async function createCampaign(supabase: any, userId: string, params: any) {
     template_params,
     filter_categories,
     filter_tags,
+    contact_ids,
   } = params;
 
-  // Get contacts based on filters
-  let query = supabase
-    .from("contacts")
-    .select("id, phone, name")
-    .eq("whatsapp_number_id", whatsapp_number_id);
+  let filteredContacts: any[] = [];
 
-  const { data: contacts, error: contactsError } = await query;
-  if (contactsError) throw contactsError;
-
-  // Filter by categories/tags in JS since array operations are simpler
-  let filteredContacts = contacts || [];
-  if (filter_categories && filter_categories.length > 0) {
-    filteredContacts = filteredContacts.filter(
-      (c: any) => c.category && filter_categories.includes(c.category)
-    );
-  }
-  // Note: For category filter we need category column - re-query with it
-  if (filter_categories && filter_categories.length > 0) {
-    const { data: catContacts } = await supabase
+  if (contact_ids && contact_ids.length > 0) {
+    // Manual selection: fetch only selected contacts
+    // Process in batches of 50 to avoid query limits
+    for (let i = 0; i < contact_ids.length; i += 50) {
+      const batch = contact_ids.slice(i, i + 50);
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("id, phone, name")
+        .in("id", batch);
+      if (error) throw error;
+      filteredContacts.push(...(data || []));
+    }
+  } else {
+    // Fallback: filter-based selection
+    const { data: allContacts, error: contactsError } = await supabase
       .from("contacts")
-      .select("id, phone, name, category")
+      .select("id, phone, name, category, tags")
       .eq("whatsapp_number_id", whatsapp_number_id);
-    filteredContacts = (catContacts || []).filter(
-      (c: any) => c.category && filter_categories.includes(c.category)
-    );
-  }
+    if (contactsError) throw contactsError;
 
-  if (filter_tags && filter_tags.length > 0) {
-    // Re-query with tags
-    const { data: tagContacts } = await supabase
-      .from("contacts")
-      .select("id, phone, name, tags, category")
-      .eq("whatsapp_number_id", whatsapp_number_id);
-    
-    let baseContacts = tagContacts || [];
+    filteredContacts = allContacts || [];
     if (filter_categories && filter_categories.length > 0) {
-      baseContacts = baseContacts.filter(
+      filteredContacts = filteredContacts.filter(
         (c: any) => c.category && filter_categories.includes(c.category)
       );
     }
-    filteredContacts = baseContacts.filter((c: any) =>
-      c.tags && c.tags.some((t: string) => filter_tags.includes(t))
-    );
+    if (filter_tags && filter_tags.length > 0) {
+      filteredContacts = filteredContacts.filter((c: any) =>
+        c.tags && c.tags.some((t: string) => filter_tags.includes(t))
+      );
+    }
   }
 
   if (filteredContacts.length === 0) {
-    throw new Error("No contacts match the selected filters");
+    throw new Error("No contacts selected");
   }
 
   // Create campaign

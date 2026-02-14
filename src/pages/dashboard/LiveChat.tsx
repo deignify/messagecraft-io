@@ -462,7 +462,7 @@ export default function LiveChat() {
   }
 
   return (
-    <div className="h-screen md:h-[calc(100vh-64px)] flex">
+    <div className="h-[100dvh] md:h-[calc(100vh-64px)] flex flex-col md:flex-row">
       {/* Conversations List */}
       <div className={cn(
         "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",

@@ -97,11 +97,38 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Add body (required)
-    components.push({
+    // Add body (required) - include example values for variables
+    const bodyComponent: any = {
       type: 'BODY',
       text: template.body_text,
-    })
+    }
+
+    // Extract variables from body text and add example values
+    const variableRegex = /\{\{(\d+)\}\}/g
+    const variableMatches = [...template.body_text.matchAll(variableRegex)]
+    const variables = template.variables as Record<string, string> | null
+
+    if (variableMatches.length > 0) {
+      // Sort by variable number to ensure correct order
+      const sortedVars = variableMatches
+        .map(m => m[1])
+        .sort((a, b) => parseInt(a) - parseInt(b))
+
+      const exampleValues = sortedVars.map(key => {
+        // Use provided sample value or generate a default
+        if (variables && variables[key] && variables[key].trim()) {
+          return variables[key]
+        }
+        // Default example values if none provided
+        return `sample_${key}`
+      })
+
+      bodyComponent.example = {
+        body_text: [exampleValues]
+      }
+    }
+
+    components.push(bodyComponent)
 
     // Add footer if present
     if (template.footer_text) {

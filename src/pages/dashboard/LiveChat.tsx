@@ -178,7 +178,28 @@ export default function LiveChat() {
     setIsOutsideWindow(differenceInHours(new Date(), new Date(lastInbound.created_at)) >= 24);
   }, [selectedConversation, messages]);
 
-  // Fetch messages & subscribe + reset unread count
+  // Reset unread count when opening a conversation
+  const selectedConvId = selectedConversation?.id;
+  useEffect(() => {
+    if (!selectedConvId) return;
+
+    const resetUnread = async () => {
+      await supabase
+        .from('conversations')
+        .update({ unread_count: 0 })
+        .eq('id', selectedConvId);
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selectedConvId ? { ...c, unread_count: 0 } : c))
+      );
+      setSelectedConversation((prev) =>
+        prev?.id === selectedConvId ? { ...prev, unread_count: 0 } : prev
+      );
+    };
+
+    resetUnread();
+  }, [selectedConvId]);
+
+  // Fetch messages & subscribe
   useEffect(() => {
     if (!selectedConversation) {
       setMessages([]);
@@ -197,25 +218,7 @@ export default function LiveChat() {
       if (data) setMessages(data as Message[]);
     };
 
-    // Reset unread count when opening conversation
-    const resetUnread = async () => {
-      if (selectedConversation.unread_count > 0) {
-        await supabase
-          .from('conversations')
-          .update({ unread_count: 0 })
-          .eq('id', selectedConversation.id);
-        // Update local state
-        setConversations((prev) =>
-          prev.map((c) => (c.id === selectedConversation.id ? { ...c, unread_count: 0 } : c))
-        );
-        setSelectedConversation((prev) =>
-          prev ? { ...prev, unread_count: 0 } : prev
-        );
-      }
-    };
-
     fetchMessages();
-    resetUnread();
 
     const channel = supabase
       .channel('messages-changes')
@@ -230,7 +233,6 @@ export default function LiveChat() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setMessages((prev) => [...prev, payload.new as Message]);
-            // Simulate typing indicator for inbound messages
             if ((payload.new as Message).direction === 'inbound') {
               setIsTyping(false);
               if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -249,7 +251,7 @@ export default function LiveChat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConversation]);
+  }, [selectedConvId]);
 
   // Scroll to bottom
   useEffect(() => {

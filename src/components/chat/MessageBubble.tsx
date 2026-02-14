@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/lib/supabase-types';
+import { formatWhatsAppText } from '@/lib/whatsapp-format';
 import { format } from 'date-fns';
 
 interface MessageBubbleProps {
@@ -70,7 +71,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               </div>
             )}
             {message.content && message.content !== '[Image]' && (
-              <p className="text-sm text-foreground whitespace-pre-wrap">{message.content}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{formatWhatsAppText(message.content)}</p>
             )}
           </div>
         ) : message.type === 'video' ? (
@@ -124,7 +125,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <p className="text-sm text-foreground whitespace-pre-wrap">{message.content || '🏷️ Sticker'}</p>
           )
         ) : (
-          <p className="text-sm text-foreground whitespace-pre-wrap">{message.content}</p>
+          <p className="text-sm text-foreground whitespace-pre-wrap">{formatWhatsAppText(message.content || '')}</p>
         )}
 
         <div className="flex items-center justify-end gap-1 mt-1">

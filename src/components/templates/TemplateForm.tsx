@@ -357,9 +357,9 @@ export function TemplateForm({
             {/* Variables */}
             {Object.keys(formData.variables || {}).length > 0 && (
               <div className="space-y-2">
-                <Label>Variable Sample Values</Label>
-                <p className="text-xs text-muted-foreground">
-                  These are sample values for preview only. Actual values will be set when sending campaigns.
+                <Label>Variable Example Values (Required for Meta Approval)</Label>
+                <p className="text-xs text-destructive font-medium">
+                  ⚠️ Meta requires example values for all variables. Templates without examples will be rejected.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(formData.variables || {}).map(([key, value]) => (

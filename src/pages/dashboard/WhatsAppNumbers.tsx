@@ -196,7 +196,6 @@ export default function WhatsAppNumbers() {
     authUrl.searchParams.set('extras', extras);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('override_default_response_type', 'true');
-    authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging');
     authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('fallback_redirect_uri', returnUrl);
     authUrl.searchParams.set('redirect_uri', edgeFunctionUrl);
@@ -282,11 +281,10 @@ export default function WhatsAppNumbers() {
               config_id: META_CONFIG_ID,
               response_type: 'code',
               override_default_response_type: true,
-              scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
-              auth_type: 'reauthorize',
               extras: {
                 setup: {
                   solutionID: META_APP_ID,
+                  external_business_id: session.user?.id,
                 },
                 featureType: 'whatsapp_business_app_onboarding',
                 sessionInfoVersion: '3',

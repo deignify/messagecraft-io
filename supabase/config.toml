@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.mobile-shop-bot]
 verify_jwt = false
+
+[functions.meta-webhook]
+verify_jwt = false

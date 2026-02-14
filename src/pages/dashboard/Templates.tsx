@@ -21,6 +21,9 @@ import {
   AlertTriangle,
   Pause,
   Filter,
+  Pencil,
+  Trash2,
+  MoreVertical,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -42,6 +45,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -103,6 +122,9 @@ export default function Templates() {
   // For creating templates via Meta
   const { createTemplate, saving } = useMessageTemplates();
   const [showForm, setShowForm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
+  const [editTarget, setEditTarget] = useState<Template | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     if (!selectedNumber || !user) {
@@ -204,15 +226,64 @@ export default function Templates() {
     return buttons?.buttons || [];
   };
 
-  const handleCreateTemplate = () => setShowForm(true);
+  const handleCreateTemplate = () => {
+    setEditTarget(null);
+    setShowForm(true);
+  };
 
   const handleFormSubmit = async (data: CreateTemplateInput) => {
     const result = await createTemplate(data, true);
     if (result) {
-      // After creating, sync to get the latest from Meta
       setTimeout(() => handleSyncTemplates(), 2000);
     }
     return result;
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!deleteTarget || !selectedNumber) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-template', {
+        body: {
+          action: 'delete',
+          whatsapp_number_id: selectedNumber.id,
+          template_name: deleteTarget.name,
+          template_id: deleteTarget.id,
+        },
+      });
+      if (error) throw error;
+      toast({ title: 'Template deleted', description: `"${deleteTarget.name}" has been deleted from Meta` });
+      setDeleteTarget(null);
+      await fetchTemplates();
+    } catch (error: any) {
+      toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditTemplate = async (template: Template) => {
+    if (!selectedNumber) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-template', {
+        body: {
+          action: 'edit',
+          whatsapp_number_id: selectedNumber.id,
+          template_name: template.name,
+          template_id: template.id,
+        },
+      });
+      if (error) throw error;
+      toast({ title: 'Ready to edit', description: 'Old template removed. Create the updated version now.' });
+      await fetchTemplates();
+      // Open form pre-filled for recreation
+      setShowForm(true);
+    } catch (error: any) {
+      toast({ title: 'Edit failed', description: error.message, variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!selectedNumber) {
@@ -362,15 +433,44 @@ export default function Templates() {
                   key={template.id}
                   className="bg-card rounded-xl border border-border p-5 hover:shadow-lg hover:border-primary/20 transition-all duration-200 flex flex-col"
                 >
-                  {/* Top badges */}
+                  {/* Top row: badges + menu */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <Badge variant="outline" className={cn('gap-1.5 text-xs', statusConf?.color)}>
-                      {statusConf?.icon}
-                      {statusConf?.label || template.status}
-                    </Badge>
-                    <Badge variant="outline" className={cn('text-xs', CATEGORY_COLORS[template.category])}>
-                      {template.category}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={cn('gap-1.5 text-xs', statusConf?.color)}>
+                        {statusConf?.icon}
+                        {statusConf?.label || template.status}
+                      </Badge>
+                      <Badge variant="outline" className={cn('text-xs', CATEGORY_COLORS[template.category])}>
+                        {template.category}
+                      </Badge>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-popover">
+                        <DropdownMenuItem onClick={() => setPreviewTemplate(template)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Preview
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleEditTemplate(template)}
+                          disabled={deleting}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit (Delete & Recreate)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setDeleteTarget(template)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete from Meta
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {/* Name */}
@@ -500,6 +600,42 @@ export default function Templates() {
         onOpenChange={(open) => !open && setPreviewTemplate(null)}
         template={previewTemplate}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template from Meta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{deleteTarget?.name}"</strong> from Meta?
+              This will permanently remove the template from your WhatsApp Business Account.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTemplate}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete from Meta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Loading overlay for edit/delete operations */}
+      {deleting && (
+        <div className="fixed inset-0 bg-background/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-card p-6 rounded-xl border border-border shadow-lg text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm font-medium text-foreground">Processing with Meta API...</p>
+            <p className="text-xs text-muted-foreground">This may take a few seconds</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

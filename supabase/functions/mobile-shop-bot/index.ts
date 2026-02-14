@@ -556,7 +556,13 @@ Deno.serve(async (req) => {
         }
       }
       else if (isBudgetSearch) {
-        responseText = '💰 *Budget Search*\n\nApna budget type karein (sirf number):\n\n_Example: 15000_'
+        responseText = '💰 *Budget Search*\n\nApna budget select karein ya amount type karein:\n\n1️⃣ Under ₹20,000\n2️⃣ Under ₹50,000\n3️⃣ Under ₹1,00,000\n\n_Ya apna custom budget likhein (e.g. 15000)_'
+        useInteractiveButtons = true
+        interactiveButtons = [
+          { id: 'budget_20000', title: '💰 Under ₹20,000' },
+          { id: 'budget_50000', title: '💰 Under ₹50,000' },
+          { id: 'budget_100000', title: '💰 Under ₹1,00,000' },
+        ]
         newState = 'budget_input'
       }
       else if (isSearch) {
@@ -609,35 +615,41 @@ Deno.serve(async (req) => {
     }
     // ===== BUDGET INPUT STATE =====
     else if (session.state === 'budget_input') {
-      const budgetNum = msg.match(/\d+/)
-      if (budgetNum) {
-        const budget = parseInt(budgetNum[0])
-        if (budget < 500) {
-          responseText = '❌ Budget bahut kam hai. Thoda zyada amount enter karein.\n\n_Example: 10000_'
+      // Handle preset budget buttons
+      let budget = 0
+      if (replyId === 'budget_20000' || msg === 'budget_20000') budget = 20000
+      else if (replyId === 'budget_50000' || msg === 'budget_50000') budget = 50000
+      else if (replyId === 'budget_100000' || msg === 'budget_100000') budget = 100000
+      else {
+        const budgetNum = msg.match(/\d+/)
+        if (budgetNum) budget = parseInt(budgetNum[0])
+      }
+
+      if (budget > 0 && budget >= 500) {
+        const budgetProducts = allProducts.filter(p => p.price <= budget)
+        if (budgetProducts.length === 0) {
+          responseText = `😔 ${formatPrice(budget)} ke under koi phone nahi mila.\n\nZyada budget try karein ya _0 for menu_`
         } else {
-          const budgetProducts = allProducts.filter(p => p.price <= budget)
-          if (budgetProducts.length === 0) {
-            responseText = `😔 ${formatPrice(budget)} ke under koi phone nahi mila.\n\nZyada budget try karein ya _0 for menu_`
-          } else {
-            const uniqueBrands = getUniqueValues(budgetProducts, 'brand')
-            listBody = `💰 *Under ${formatPrice(budget)}* - Brand select karein:`
-            listButtonText = 'Select Brand'
-            listSections = [{
-              title: `Brands under ${formatPrice(budget)}`,
-              rows: uniqueBrands.slice(0, 10).map((b, i) => {
-                const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
-                const modelCount = new Set(bProducts.map(p => p.model)).size
-                return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
-              }),
-            }]
-            useInteractiveList = true
-            session.data.budget = budget
-            session.data.budget_brands = uniqueBrands
-            newState = 'budget_brands'
-          }
+          const uniqueBrands = getUniqueValues(budgetProducts, 'brand')
+          listBody = `💰 *Under ${formatPrice(budget)}* - Brand select karein:`
+          listButtonText = 'Select Brand'
+          listSections = [{
+            title: `Brands under ${formatPrice(budget)}`,
+            rows: uniqueBrands.slice(0, 10).map((b, i) => {
+              const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
+              const modelCount = new Set(bProducts.map(p => p.model)).size
+              return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
+            }),
+          }]
+          useInteractiveList = true
+          session.data.budget = budget
+          session.data.budget_brands = uniqueBrands
+          newState = 'budget_brands'
         }
+      } else if (budget > 0) {
+        responseText = '❌ Budget bahut kam hai. Thoda zyada amount enter karein.\n\n_Example: 10000_'
       } else {
-        responseText = '❌ Sirf number likhein. Example: _15000_'
+        responseText = '❌ Sirf number likhein ya button select karein. Example: _15000_'
       }
     }
     // ===== BUDGET BRANDS - SELECT BRAND WITHIN BUDGET =====

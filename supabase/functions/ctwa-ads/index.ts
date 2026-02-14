@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +8,20 @@ const corsHeaders = {
 };
 
 const META_GRAPH_URL = "https://graph.facebook.com/v22.0";
+
+const CtwaActionSchema = z.object({
+  action: z.enum(["list", "create", "update-status", "delete", "sync-insights", "get-stats"]),
+  whatsapp_number_id: z.string().uuid().optional(),
+  campaign_id: z.string().uuid().optional(),
+  new_status: z.enum(["active", "paused"]).optional(),
+  name: z.string().max(256).optional(),
+  daily_budget: z.number().positive().max(1000000).optional(),
+  ad_text: z.string().max(2048).optional(),
+  pre_filled_message: z.string().max(256).optional(),
+  platform: z.string().max(20).optional(),
+  targeting: z.record(z.unknown()).optional(),
+  page_id: z.string().max(50).optional(),
+}).passthrough();
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +54,15 @@ Deno.serve(async (req) => {
     }
     const userId = claimsData.claims.sub;
 
-    const { action, ...params } = await req.json();
+    const rawBody = await req.json();
+    const parseResult = CtwaActionSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { action, ...params } = parseResult.data;
     let adAccountId = Deno.env.get("META_AD_ACCOUNT_ID");
     if (!adAccountId) {
       throw new Error("META_AD_ACCOUNT_ID not configured");

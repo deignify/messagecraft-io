@@ -1,9 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const SubmitTemplateSchema = z.object({
+  template_id: z.string().uuid(),
+  whatsapp_number_id: z.string().uuid(),
+}).strict()
 
 interface TemplateButton {
   type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER' | 'COPY_CODE';
@@ -49,12 +55,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    const body = await req.json()
-    const { template_id, whatsapp_number_id } = body
-
-    if (!template_id || !whatsapp_number_id) {
-      throw new Error('template_id and whatsapp_number_id are required')
+    const rawBody = await req.json()
+    const parseResult = SubmitTemplateSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
+    const { template_id, whatsapp_number_id } = parseResult.data
 
     // Get template from database
     const { data: template, error: templateError } = await supabase

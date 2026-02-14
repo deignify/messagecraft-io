@@ -1,21 +1,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface ShopBotRequest {
-  whatsapp_number_id: string;
-  phone_number_id: string;
-  access_token: string;
-  from_phone: string;
-  message_text: string;
-  message_type?: string;
-  media_info?: { type: string; id: string; mime_type: string };
-  contact_name?: string;
-  interactive_reply_id?: string | null;
-}
+const ShopBotSchema = z.object({
+  whatsapp_number_id: z.string().uuid(),
+  phone_number_id: z.string().min(1).max(50),
+  access_token: z.string().min(1).max(1024),
+  from_phone: z.string().min(1).max(20),
+  message_text: z.string().max(4096),
+  message_type: z.string().max(20).optional(),
+  media_info: z.object({ type: z.string(), id: z.string(), mime_type: z.string() }).optional(),
+  contact_name: z.string().max(256).optional(),
+  interactive_reply_id: z.string().max(256).nullable().optional(),
+}).strict()
+
+type ShopBotRequest = z.infer<typeof ShopBotSchema>
 
 interface BotSession {
   state: string;
@@ -369,7 +372,15 @@ Deno.serve(async (req) => {
     const GOOGLE_SA_KEY = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_KEY')
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    const body: ShopBotRequest = await req.json()
+    const rawBody = await req.json()
+    const parseResult = ShopBotSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const body = parseResult.data
     const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, message_type, contact_name, interactive_reply_id } = body
 
     console.log('Mobile shop bot processing:', message_text, 'type:', message_type, 'reply_id:', interactive_reply_id, 'from:', from_phone)

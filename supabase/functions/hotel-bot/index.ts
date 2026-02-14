@@ -1,25 +1,28 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface HotelBotRequest {
-  whatsapp_number_id: string;
-  phone_number_id: string;
-  access_token: string;
-  from_phone: string;
-  message_text: string;
-  message_type?: 'text' | 'image' | 'document' | 'contacts';
-  media_info?: {
-    type: string;
-    id: string;
-    mime_type: string;
-    filename?: string;
-  };
-  contact_name?: string;
-}
+const HotelBotSchema = z.object({
+  whatsapp_number_id: z.string().uuid(),
+  phone_number_id: z.string().min(1).max(50),
+  access_token: z.string().min(1).max(1024),
+  from_phone: z.string().min(1).max(20),
+  message_text: z.string().max(4096),
+  message_type: z.enum(['text', 'image', 'document', 'contacts']).optional(),
+  media_info: z.object({
+    type: z.string(),
+    id: z.string(),
+    mime_type: z.string(),
+    filename: z.string().optional(),
+  }).optional(),
+  contact_name: z.string().max(256).optional(),
+}).strict()
+
+type HotelBotRequest = z.infer<typeof HotelBotSchema>
 
 interface BotSession {
   state: string;
@@ -278,7 +281,15 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-    const body: HotelBotRequest = await req.json()
+    const rawBody = await req.json()
+    const parseResult = HotelBotSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const body = parseResult.data
     const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, message_type, media_info, contact_name } = body
 
     console.log('Hotel bot processing message:', message_text, 'type:', message_type, 'from:', from_phone)

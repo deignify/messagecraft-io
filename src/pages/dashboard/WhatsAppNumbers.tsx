@@ -46,6 +46,16 @@ import type { WhatsAppNumber } from '@/lib/supabase-types';
 
 type ConnectionType = 'cloud_api' | 'business_app';
 
+const META_APP_ID = '1803274667137293';
+const META_CONFIG_ID = '3692365847564442';
+
+declare global {
+  interface Window {
+    FB: any;
+    fbAsyncInit: () => void;
+  }
+}
+
 export default function WhatsAppNumbers() {
   const { numbers, selectedNumber, selectNumber, refreshNumbers, loading } = useWhatsApp();
   const { session } = useAuth();
@@ -55,7 +65,32 @@ export default function WhatsAppNumbers() {
   const [unlinking, setUnlinking] = useState(false);
   const [syncingTokens, setSyncingTokens] = useState(false);
   const [connectionType, setConnectionType] = useState<ConnectionType>('cloud_api');
-  const [configId, setConfigId] = useState('');
+  const [fbSdkReady, setFbSdkReady] = useState(false);
+  const [connectingBusiness, setConnectingBusiness] = useState(false);
+
+  // Initialize Facebook SDK
+  useEffect(() => {
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: META_APP_ID,
+        cookie: true,
+        xfbml: false,
+        version: 'v23.0',
+      });
+      setFbSdkReady(true);
+    };
+
+    // If SDK already loaded
+    if (window.FB) {
+      window.FB.init({
+        appId: META_APP_ID,
+        cookie: true,
+        xfbml: false,
+        version: 'v23.0',
+      });
+      setFbSdkReady(true);
+    }
+  }, []);
 
   // Handle OAuth callback results
   useEffect(() => {
@@ -114,11 +149,84 @@ export default function WhatsAppNumbers() {
       return;
     }
 
-    if (connectionType === 'business_app' && !configId.trim()) {
-      toast.error('Please enter your Meta Configuration ID');
+    // Business App: use Facebook JS SDK Embedded Signup popup
+    if (connectionType === 'business_app') {
+      if (!fbSdkReady || !window.FB) {
+        toast.error('Facebook SDK is still loading. Please try again in a moment.');
+        return;
+      }
+
+      setConnectingBusiness(true);
+      
+      window.FB.login(
+        async (response: any) => {
+          if (response.authResponse?.code) {
+            const code = response.authResponse.code;
+            toast.loading('Connecting your WhatsApp Business...', { id: 'fb-connect' });
+
+            try {
+              const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
+              const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+
+              const stateValue = btoa(
+                JSON.stringify({
+                  user_id: session.user.id,
+                  timestamp: Date.now(),
+                  account_type: 'business_app',
+                })
+              );
+
+              const res = await fetch(`${functionBaseUrl}?action=callback`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({
+                  code,
+                  redirect_uri: window.location.origin + '/',
+                  state: stateValue,
+                }),
+              });
+
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || !data?.success) {
+                throw new Error(data?.error || 'Failed to connect');
+              }
+
+              toast.success(
+                `Successfully connected ${data.phone_numbers?.length || 0} WhatsApp number(s)!`,
+                { id: 'fb-connect' }
+              );
+              await refreshNumbers();
+              setConnectDialogOpen(false);
+            } catch (err) {
+              console.error('FB Embedded Signup exchange failed:', err);
+              toast.error('Failed to connect WhatsApp Business. Please try again.', { id: 'fb-connect' });
+            }
+          } else {
+            console.log('FB login cancelled or no code returned', response);
+            toast.error('Connection cancelled or failed.');
+          }
+          setConnectingBusiness(false);
+        },
+        {
+          config_id: META_CONFIG_ID,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {
+              solutionID: META_APP_ID,
+            },
+            featureType: 'whatsapp_business_app_onboarding',
+            sessionInfoVersion: '3',
+          },
+        }
+      );
       return;
     }
 
+    // Cloud API: standard OAuth redirect
     const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
     const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
     const returnUrl = `${window.location.origin}/dashboard/numbers`;
@@ -133,8 +241,7 @@ export default function WhatsAppNumbers() {
         body: JSON.stringify({
           redirect_uri: functionBaseUrl,
           return_url: returnUrl,
-          account_type: connectionType,
-          config_id: connectionType === 'business_app' ? configId.trim() : undefined,
+          account_type: 'cloud_api',
         }),
       });
 
@@ -513,36 +620,12 @@ export default function WhatsAppNumbers() {
                         <span className="font-medium text-sm">WhatsApp Business App</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Connect your existing WhatsApp Business App via Meta Embedded Signup with Configuration ID.
+                        Connect your existing WhatsApp Business App via Meta Embedded Signup.
                       </p>
                     </div>
                   </label>
                 </RadioGroup>
 
-                {/* Config ID input for Business App */}
-                {connectionType === 'business_app' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="config-id">Meta Configuration ID *</Label>
-                    <Input
-                      id="config-id"
-                      value={configId}
-                      onChange={(e) => setConfigId(e.target.value)}
-                      placeholder="e.g., 123456789012345"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Find this in your{' '}
-                      <a 
-                        href="https://developers.facebook.com/apps" 
-                        target="_blank" 
-                        rel="noopener" 
-                        className="underline text-primary"
-                      >
-                        Meta Developer Dashboard
-                      </a>
-                      {' '}→ Your App → WhatsApp → Embedded Signup → Configuration ID.
-                    </p>
-                  </div>
-                )}
 
                 {/* Prerequisites */}
                 <div className="bg-muted rounded-lg p-4 text-sm">
@@ -558,8 +641,7 @@ export default function WhatsAppNumbers() {
                       </>
                     ) : (
                       <>
-                        <li>A Meta App with Embedded Signup enabled</li>
-                        <li>Your Embedded Signup Configuration ID</li>
+                        <li>A Facebook Business account</li>
                         <li>WhatsApp Business App installed on your phone</li>
                       </>
                     )}
@@ -570,14 +652,21 @@ export default function WhatsAppNumbers() {
                   variant="hero" 
                   className="w-full" 
                   onClick={handleConnect}
-                  disabled={connectionType === 'business_app' && !configId.trim()}
+                  disabled={connectingBusiness}
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  {connectingBusiness ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4" />
+                  )}
                   {connectionType === 'cloud_api' ? 'Connect with Meta' : 'Connect Business App'}
                 </Button>
                 
                 <p className="text-xs text-center text-muted-foreground">
-                  You'll be redirected to Meta to authorize your WhatsApp Business Account
+                  {connectionType === 'cloud_api' 
+                    ? "You'll be redirected to Meta to authorize your WhatsApp Business Account"
+                    : "A popup will open for you to select your WhatsApp Business account"
+                  }
                 </p>
               </div>
             </DialogContent>

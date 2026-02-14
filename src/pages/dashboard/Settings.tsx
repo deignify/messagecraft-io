@@ -64,10 +64,10 @@ export default function SettingsPage() {
     .toUpperCase() || user?.email?.[0].toUpperCase() || '?';
 
   return (
-    <div className="p-6 lg:p-8 max-w-3xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto space-y-4 md:space-y-6">
       <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1">Manage your account and business settings</p>
+        <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">Settings</h1>
+        <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your account and business settings</p>
       </div>
 
       <Tabs defaultValue="account" className="space-y-6">
@@ -84,7 +84,7 @@ export default function SettingsPage() {
 
         <TabsContent value="account" className="space-y-8">
           {/* Profile Section */}
-          <section className="bg-card rounded-xl border border-border p-6">
+          <section className="bg-card rounded-xl border border-border p-4 md:p-6">
             <div className="flex items-center gap-3 mb-6">
               <User className="h-5 w-5 text-primary" />
               <h2 className="text-lg font-semibold text-foreground">Profile</h2>

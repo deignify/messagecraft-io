@@ -610,11 +610,11 @@ export default function WhatsAppNumbers() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="flex flex-col gap-3">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">
+          <h1 className="text-xl md:text-2xl font-display font-bold text-foreground">
             WhatsApp Numbers
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -622,7 +622,7 @@ export default function WhatsAppNumbers() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           {numbers.length > 0 && (
             <Button 
               variant="outline" 
@@ -800,92 +800,90 @@ export default function WhatsAppNumbers() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3 md:gap-4">
           {numbers.map((number) => (
             <div
               key={number.id}
               className={cn(
-                "bg-card rounded-xl border p-5 transition-all cursor-pointer hover:shadow-md",
+                "bg-card rounded-xl border p-4 md:p-5 transition-all cursor-pointer hover:shadow-md",
                 selectedNumber?.id === number.id
                   ? "border-primary shadow-md"
                   : "border-border"
               )}
               onClick={() => selectNumber(number.id)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "h-12 w-12 rounded-xl flex items-center justify-center",
-                    number.status === 'active' ? "bg-status-active/10" : "bg-muted"
-                  )}>
-                    <Phone className={cn(
-                      "h-6 w-6",
-                      number.status === 'active' ? "text-status-active" : "text-muted-foreground"
-                    )} />
-                  </div>
-                  
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">
-                        {number.display_name || number.phone_number}
-                      </h3>
-                      {selectedNumber?.id === number.id && (
-                        <span className="px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full">
-                          Selected
-                        </span>
-                      )}
-                      <span className={cn(
-                        "px-2 py-0.5 text-xs font-medium rounded-full",
-                        (number as any).account_type === 'business_app'
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-muted text-muted-foreground"
-                      )}>
-                        {(number as any).account_type === 'business_app' ? 'Business App' : 'Cloud API'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {number.phone_number}
-                    </p>
-                    {number.business_name && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {number.business_name}
-                      </p>
-                    )}
-                  </div>
+              {/* Top row: icon + info */}
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "h-10 w-10 md:h-12 md:w-12 rounded-xl flex items-center justify-center flex-shrink-0",
+                  number.status === 'active' ? "bg-status-active/10" : "bg-muted"
+                )}>
+                  <Phone className={cn(
+                    "h-5 w-5 md:h-6 md:w-6",
+                    number.status === 'active' ? "text-status-active" : "text-muted-foreground"
+                  )} />
                 </div>
                 
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(number.status)}
-                      <span className="text-sm font-medium">
-                        {getStatusLabel(number.status)}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold text-foreground text-sm md:text-base truncate">
+                      {number.display_name || number.phone_number}
+                    </h3>
+                    {selectedNumber?.id === number.id && (
+                      <span className="px-2 py-0.5 text-[10px] md:text-xs font-medium bg-primary text-primary-foreground rounded-full">
+                        Selected
                       </span>
-                    </div>
-                    {number.quality_rating && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Quality: {number.quality_rating}
-                      </p>
                     )}
+                    <span className={cn(
+                      "px-2 py-0.5 text-[10px] md:text-xs font-medium rounded-full",
+                      (number as any).account_type === 'business_app'
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}>
+                      {(number as any).account_type === 'business_app' ? 'Business App' : 'Cloud API'}
+                    </span>
                   </div>
-                  
-                  {/* Verify Connection Button */}
+                  <p className="text-xs md:text-sm text-muted-foreground">
+                    {number.phone_number}
+                  </p>
+                  {number.business_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {number.business_name}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Bottom row: status + actions */}
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                <div className="flex items-center gap-2">
+                  {getStatusIcon(number.status)}
+                  <span className="text-xs md:text-sm font-medium">
+                    {getStatusLabel(number.status)}
+                  </span>
+                  {number.quality_rating && (
+                    <span className="text-[10px] md:text-xs text-muted-foreground">
+                      • Quality: {number.quality_rating}
+                    </span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground hover:text-primary"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
                     onClick={(e) => handleVerifyConnection(e, number)}
                     title="Verify connection"
                   >
                     <Wifi className="h-4 w-4" />
                   </Button>
                   
-                  {/* Reconnect Button - shows for disconnected numbers */}
                   {number.status === 'disconnected' && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-muted-foreground hover:text-primary"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
                       onClick={(e) => {
                         e.stopPropagation();
                         setConnectDialogOpen(true);
@@ -899,7 +897,7 @@ export default function WhatsAppNumbers() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-muted-foreground hover:text-destructive"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={(e) => handleUnlinkClick(e, number)}
                     title={number.status === 'disconnected' ? 'Remove number' : 'Disconnect number'}
                   >

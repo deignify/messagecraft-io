@@ -201,6 +201,37 @@ export function DashboardLayout() {
                 <X className="h-5 w-5" />
               </Button>
             </div>
+
+            {/* WhatsApp Number Selector in Mobile Sidebar */}
+            {numbers.length > 0 && (
+              <div className="px-3 py-3 border-b border-sidebar-border">
+                <Select
+                  value={selectedNumber?.id || ''}
+                  onValueChange={(val) => {
+                    selectNumber(val);
+                  }}
+                >
+                  <SelectTrigger className="w-full bg-sidebar-accent border-sidebar-border text-sidebar-foreground text-sm">
+                    <SelectValue placeholder="Select a number" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {numbers.map((num) => (
+                      <SelectItem key={num.id} value={num.id}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={cn(
+                              "h-2 w-2 rounded-full",
+                              num.status === 'active' ? "status-active" : "status-pending"
+                            )}
+                          />
+                          <span>{num.display_name || num.phone_number}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             
             <nav className="p-3 space-y-1">
               {navItems.map((item) => {
@@ -300,20 +331,16 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        {/* Page Content - extra padding bottom for mobile nav, none on chat page */}
+        {/* Page Content - extra padding bottom for mobile nav */}
         <main className={cn(
-          "flex-1 min-h-0 lg:pb-0",
-          location.pathname === '/dashboard/chat' ? "pb-0 overflow-hidden" : "pb-16 overflow-auto"
+          "flex-1 min-h-0 pb-16 lg:pb-0 overflow-auto"
         )}>
           <Outlet />
         </main>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className={cn(
-        "lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50 safe-area-inset-bottom",
-        location.pathname === '/dashboard/chat' && "hidden"
-      )}>
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40 safe-area-inset-bottom">
         <div className="flex items-center justify-around h-16">
           {mobileNavItems.map((item) => {
             const isActive = location.pathname === item.path;

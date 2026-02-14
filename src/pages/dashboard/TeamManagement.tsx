@@ -53,14 +53,14 @@ export default function TeamManagement() {
   const showInvitationsTab = isWorkspaceOwner || hasReceivedInvitations;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Users className="h-6 w-6" />
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <Users className="h-5 w-5 md:h-6 md:w-6" />
             Team Management
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm md:text-base text-muted-foreground">
             Manage your team, assign roles, and track performance
           </p>
         </div>

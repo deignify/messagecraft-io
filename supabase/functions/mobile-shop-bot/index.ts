@@ -14,6 +14,7 @@ interface ShopBotRequest {
   message_type?: string;
   media_info?: { type: string; id: string; mime_type: string };
   contact_name?: string;
+  interactive_reply_id?: string | null;
 }
 
 interface BotSession {
@@ -28,7 +29,7 @@ interface Product {
   color: string;
   price: number;
   stock: number;
-  type: string; // new or secondhand
+  type: string;
   available: string;
 }
 
@@ -67,7 +68,6 @@ async function getGoogleAccessToken(serviceAccountKey: string): Promise<string> 
   const encodedClaim = base64UrlEncode(new TextEncoder().encode(JSON.stringify(claim)))
   const signatureInput = `${encodedHeader}.${encodedClaim}`
 
-  // Import private key
   const pemContents = sa.private_key
     .replace(/-----BEGIN PRIVATE KEY-----/, '')
     .replace(/-----END PRIVATE KEY-----/, '')
@@ -204,7 +204,6 @@ async function sendWhatsAppInteractiveList(
   bodyText: string, buttonText: string, sections: { title: string; rows: { id: string; title: string; description?: string }[] }[]
 ): Promise<{ success: boolean; waMessageId?: string }> {
   try {
-    // Limit rows to 10 total across all sections
     let totalRows = 0
     const limitedSections = sections.map(section => {
       const remaining = 10 - totalRows
@@ -245,8 +244,13 @@ async function sendWhatsAppInteractiveList(
 }
 
 // ============ HELPER FUNCTIONS ============
-function getProducts(rows: string[][]): Product[] {
-  // Skip header row
+// Get only available products (stock > 0 and available = yes)
+function getAvailableProducts(rows: string[][]): Product[] {
+  return getAllProducts(rows).filter(p => p.available.toLowerCase() === 'yes' && p.stock > 0)
+}
+
+// Get ALL products including unavailable ones (for showing models to customers)
+function getAllProducts(rows: string[][]): Product[] {
   return rows.slice(1).map(row => ({
     brand: (row[0] || '').trim(),
     model: (row[1] || '').trim(),
@@ -256,7 +260,11 @@ function getProducts(rows: string[][]): Product[] {
     stock: parseInt(row[5] || '0'),
     type: (row[6] || 'new').trim().toLowerCase(),
     available: (row[7] || 'Yes').trim(),
-  })).filter(p => p.brand && p.model && p.available.toLowerCase() === 'yes' && p.stock > 0)
+  })).filter(p => p.brand && p.model)
+}
+
+function isProductAvailable(product: Product): boolean {
+  return product.available.toLowerCase() === 'yes' && product.stock > 0
 }
 
 function getBranches(rows: string[][]): Branch[] {
@@ -301,13 +309,30 @@ function levenshtein(a: string, b: string): number {
   return dp[m][n]
 }
 
+// Resolve selection from interactive reply ID or fuzzy text match
+function resolveSelection(msg: string, originalMsg: string, replyId: string | null, prefix: string, list: string[]): string {
+  // First try reply ID (e.g. "brand_0", "model_1", "variant_2")
+  if (replyId) {
+    const idMatch = replyId.match(new RegExp(`^${prefix}_(\\d+)$`))
+    if (idMatch && list[parseInt(idMatch[1])]) {
+      return list[parseInt(idMatch[1])]
+    }
+  }
+  // Then try the message text against IDs
+  const msgIdMatch = msg.match(new RegExp(`^${prefix}_(\\d+)$`))
+  if (msgIdMatch && list[parseInt(msgIdMatch[1])]) {
+    return list[parseInt(msgIdMatch[1])]
+  }
+  // Finally fuzzy match the text
+  return list.find(item => fuzzyMatch(originalMsg, item)) || ''
+}
+
 // ============ STORE BOT MESSAGE IN DB ============
 async function storeBotMessage(
   supabase: any, userId: string, conversationId: string | null,
   waNumberId: string, contactPhone: string, content: string, waMessageId?: string
 ) {
   if (!conversationId) {
-    // Find conversation
     const { data: conv } = await supabase
       .from('conversations')
       .select('id')
@@ -345,9 +370,9 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
     const body: ShopBotRequest = await req.json()
-    const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, message_type, contact_name } = body
+    const { whatsapp_number_id, phone_number_id, access_token, from_phone, message_text, message_type, contact_name, interactive_reply_id } = body
 
-    console.log('Mobile shop bot processing:', message_text, 'from:', from_phone)
+    console.log('Mobile shop bot processing:', message_text, 'type:', message_type, 'reply_id:', interactive_reply_id, 'from:', from_phone)
 
     // Get shop config
     const { data: shop, error: shopError } = await supabase
@@ -378,7 +403,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get Google access token
     const googleToken = await getGoogleAccessToken(GOOGLE_SA_KEY)
 
     // Ensure automation record
@@ -446,6 +470,7 @@ Deno.serve(async (req) => {
 
     const msg = message_text.toLowerCase().trim()
     const originalMsg = message_text.trim()
+    const replyId = interactive_reply_id || null
     let responseText = ''
     let newState = session.state
     let useInteractiveButtons = false
@@ -460,7 +485,8 @@ Deno.serve(async (req) => {
       readSheet(googleToken, shop.google_sheet_id, 'Products!A:H'),
       readSheet(googleToken, shop.google_sheet_id, 'Branches!A:F'),
     ])
-    const products = getProducts(productRows)
+    const allProducts = getAllProducts(productRows)
+    const availableProducts = allProducts.filter(p => isProductAvailable(p))
     const branches = getBranches(branchRows)
 
     // ===== RESET COMMANDS =====
@@ -479,10 +505,15 @@ Deno.serve(async (req) => {
     }
     // ===== WELCOME STATE - TYPE SELECTION =====
     else if (session.state === 'welcome') {
-      if (msg === 'new_phone' || msg === 'new phone' || msg === 'new' || msg === '1' || msg === '📱 new phone' || msg.includes('new') || msg.includes('naya') || msg.includes('nya')) {
+      const isNewPhone = replyId === 'new_phone' || msg === 'new_phone' || msg === 'new phone' || msg === 'new' || msg === '1' || msg.includes('📱 new phone') || msg.includes('new') || msg.includes('naya') || msg.includes('nya')
+      const isSecondHand = replyId === 'secondhand' || msg === 'secondhand' || msg === 'second hand' || msg === 'second' || msg === '2' || msg.includes('♻️ second hand') || msg.includes('second') || msg.includes('purana') || msg.includes('used')
+      const isSearch = replyId === 'search' || msg === 'search' || msg === '3' || msg.includes('🔍 search model') || msg.includes('search') || msg.includes('find') || msg.includes('dhundo')
+
+      if (isNewPhone) {
         session.data.phone_type = 'new'
         newState = 'choose_brand'
-        const newProducts = products.filter(p => p.type === 'new')
+        // Show ALL brands for new phones (including models that may be unavailable)
+        const newProducts = allProducts.filter(p => p.type === 'new')
         const uniqueBrands = getUniqueValues(newProducts, 'brand')
         if (uniqueBrands.length === 0) {
           responseText = '😔 Abhi new phones available nahi hai. Jaldi aa jayenge!\n\n_Reply 0 for menu_'
@@ -493,18 +524,18 @@ Deno.serve(async (req) => {
           listSections = [{
             title: 'Available Brands',
             rows: uniqueBrands.map((b, i) => {
-              const count = newProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).length
-              return { id: `brand_${i}`, title: b, description: `${count} models available` }
+              const count = new Set(newProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).map(p => p.model)).size
+              return { id: `brand_${i}`, title: b, description: `${count} models` }
             }),
           }]
           useInteractiveList = true
           session.data.brands = uniqueBrands
         }
       }
-      else if (msg === 'secondhand' || msg === 'second hand' || msg === 'second' || msg === '2' || msg === '♻️ second hand' || msg.includes('second') || msg.includes('purana') || msg.includes('used')) {
+      else if (isSecondHand) {
         session.data.phone_type = 'secondhand'
         newState = 'choose_brand'
-        const shProducts = products.filter(p => p.type === 'secondhand')
+        const shProducts = allProducts.filter(p => p.type === 'secondhand')
         const uniqueBrands = getUniqueValues(shProducts, 'brand')
         if (uniqueBrands.length === 0) {
           responseText = '😔 Abhi second hand phones available nahi hai.\n\n_Reply 0 for menu_'
@@ -515,7 +546,7 @@ Deno.serve(async (req) => {
           listSections = [{
             title: 'Available Brands',
             rows: uniqueBrands.map((b, i) => {
-              const count = shProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).length
+              const count = new Set(shProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).map(p => p.model)).size
               return { id: `brand_${i}`, title: b, description: `${count} models` }
             }),
           }]
@@ -523,13 +554,13 @@ Deno.serve(async (req) => {
           session.data.brands = uniqueBrands
         }
       }
-      else if (msg === 'search' || msg === '3' || msg === '🔍 search model' || msg.includes('search') || msg.includes('find') || msg.includes('dhundo')) {
+      else if (isSearch) {
         responseText = '🔍 *Search karo!*\n\nBrand name, model name, ya budget type karein:\n\n_Examples:_\n• _"iPhone"_\n• _"Samsung"_\n• _"best phone under 20000"_\n• _"iPhone 16 Pro"_'
         newState = 'free_search'
       }
       else {
         // Try to detect intent from free text
-        const searchResult = handleFreeTextSearch(msg, products)
+        const searchResult = handleFreeTextSearch(msg, allProducts)
         if (searchResult) {
           responseText = searchResult.text
           newState = searchResult.newState || 'welcome'
@@ -547,7 +578,7 @@ Deno.serve(async (req) => {
     }
     // ===== FREE SEARCH STATE =====
     else if (session.state === 'free_search') {
-      const searchResult = handleFreeTextSearch(msg, products)
+      const searchResult = handleFreeTextSearch(msg, allProducts)
       if (searchResult) {
         responseText = searchResult.text
         newState = searchResult.newState || 'welcome'
@@ -566,20 +597,12 @@ Deno.serve(async (req) => {
     else if (session.state === 'choose_brand') {
       const brandsList = (session.data.brands as string[]) || []
       const phoneType = (session.data.phone_type as string) || 'new'
-      let selectedBrand = ''
-
-      // Check by list reply ID
-      const brandIndex = msg.match(/^brand_(\d+)$/)?.[1]
-      if (brandIndex !== undefined && brandsList[parseInt(brandIndex)]) {
-        selectedBrand = brandsList[parseInt(brandIndex)]
-      } else {
-        // Fuzzy match
-        selectedBrand = brandsList.find(b => fuzzyMatch(originalMsg, b)) || ''
-      }
+      const selectedBrand = resolveSelection(msg, originalMsg, replyId, 'brand', brandsList)
 
       if (selectedBrand) {
         session.data.selected_brand = selectedBrand
-        const brandProducts = products.filter(p =>
+        // Show ALL models for this brand (including unavailable)
+        const brandProducts = allProducts.filter(p =>
           p.brand.toLowerCase() === selectedBrand.toLowerCase() && p.type === phoneType
         )
         const uniqueModels = getUniqueValues(brandProducts, 'model')
@@ -594,8 +617,10 @@ Deno.serve(async (req) => {
             title: `${selectedBrand} Models`,
             rows: uniqueModels.map((m, i) => {
               const mp = brandProducts.filter(p => p.model === m)
+              const availableCount = mp.filter(p => isProductAvailable(p)).length
               const minPrice = Math.min(...mp.map(p => p.price))
-              return { id: `model_${i}`, title: m, description: `From ${formatPrice(minPrice)}` }
+              const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
+              return { id: `model_${i}`, title: m, description: status }
             }),
           }]
           useInteractiveList = true
@@ -611,75 +636,89 @@ Deno.serve(async (req) => {
       const modelsList = (session.data.models as string[]) || []
       const phoneType = (session.data.phone_type as string) || 'new'
       const selectedBrand = (session.data.selected_brand as string) || ''
-      let selectedModel = ''
-
-      const modelIndex = msg.match(/^model_(\d+)$/)?.[1]
-      if (modelIndex !== undefined && modelsList[parseInt(modelIndex)]) {
-        selectedModel = modelsList[parseInt(modelIndex)]
-      } else {
-        selectedModel = modelsList.find(m => fuzzyMatch(originalMsg, m)) || ''
-      }
+      const selectedModel = resolveSelection(msg, originalMsg, replyId, 'model', modelsList)
 
       if (selectedModel) {
         session.data.selected_model = selectedModel
-        const modelProducts = products.filter(p =>
+        const modelProducts = allProducts.filter(p =>
           p.brand.toLowerCase() === selectedBrand.toLowerCase() &&
           p.model.toLowerCase() === selectedModel.toLowerCase() &&
           p.type === phoneType
         )
-        const uniqueVariants = getUniqueValues(modelProducts, 'variant')
+        
+        // Check if ANY variant of this model is available
+        const availableModelProducts = modelProducts.filter(p => isProductAvailable(p))
+        
+        if (availableModelProducts.length === 0) {
+          // Model exists but ALL variants are unavailable
+          // Notify agent about customer inquiry
+          await notifyAgent(shop, from_phone, contact_name || 'Customer', `${selectedBrand} ${selectedModel}`, phone_number_id, access_token, supabase)
+          
+          responseText = `😔 *${selectedBrand} ${selectedModel}* abhi available nahi hai.\n\n` +
+            `Koi baat nahi! Humara agent aapko jaldi contact karke availability check karke btayega. 🙏\n\n` +
+            `Kya aap koi aur model dekhna chahenge?\n\n_Reply 0 for menu_`
+          useInteractiveButtons = true
+          interactiveButtons = [
+            { id: 'new_phone', title: '📱 New Phone' },
+            { id: 'secondhand', title: '♻️ Second Hand' },
+            { id: 'search', title: '🔍 Search Model' },
+          ]
+          newState = 'welcome'
+          session.data = {}
+        } else {
+          // Show only available variants
+          const uniqueVariants = getUniqueValues(availableModelProducts, 'variant')
 
-        if (uniqueVariants.length === 1) {
-          // Only one variant, skip to color
-          session.data.selected_variant = uniqueVariants[0]
-          const variantProducts = modelProducts.filter(p => p.variant === uniqueVariants[0])
-          const uniqueColors = getUniqueValues(variantProducts, 'color')
+          if (uniqueVariants.length === 1) {
+            session.data.selected_variant = uniqueVariants[0]
+            const variantProducts = availableModelProducts.filter(p => p.variant === uniqueVariants[0])
+            const uniqueColors = getUniqueValues(variantProducts, 'color')
 
-          if (uniqueColors.length === 1) {
-            // Only one color, go to confirm
-            session.data.selected_color = uniqueColors[0]
-            const product = variantProducts.find(p => p.color === uniqueColors[0])!
-            responseText = getConfirmMessage(session.data, product)
-            useInteractiveButtons = true
-            interactiveButtons = [
-              { id: 'confirm_yes', title: '✅ Confirm Order' },
-              { id: 'confirm_no', title: '❌ Cancel' },
-            ]
-            newState = 'confirm_product'
+            if (uniqueColors.length === 1) {
+              session.data.selected_color = uniqueColors[0]
+              const product = variantProducts.find(p => p.color === uniqueColors[0])!
+              session.data.product_price = product.price
+              responseText = getConfirmMessage(session.data, product)
+              useInteractiveButtons = true
+              interactiveButtons = [
+                { id: 'confirm_yes', title: '✅ Confirm Order' },
+                { id: 'confirm_no', title: '❌ Cancel' },
+              ]
+              newState = 'confirm_product'
+            } else {
+              listBody = `🎨 *${selectedModel} ${uniqueVariants[0]}* - Color choose karein:`
+              listButtonText = 'Select Color'
+              listSections = [{
+                title: 'Available Colors',
+                rows: uniqueColors.map((c, i) => {
+                  const cp = variantProducts.find(p => p.color === c)
+                  return { id: `color_${i}`, title: c, description: cp ? formatPrice(cp.price) : '' }
+                }),
+              }]
+              useInteractiveList = true
+              session.data.colors = uniqueColors
+              newState = 'choose_color'
+            }
           } else {
-            listBody = `🎨 *${selectedModel} ${uniqueVariants[0]}* - Color choose karein:`
-            listButtonText = 'Select Color'
+            listBody = `📱 *${selectedModel}* - Variant select karein:`
+            listButtonText = 'Select Variant'
             listSections = [{
-              title: 'Available Colors',
-              rows: uniqueColors.map((c, i) => {
-                const cp = variantProducts.find(p => p.color === c)
-                return { id: `color_${i}`, title: c, description: cp ? formatPrice(cp.price) : '' }
+              title: `${selectedModel} Variants`,
+              rows: uniqueVariants.map((v, i) => {
+                const vp = availableModelProducts.filter(p => p.variant === v)
+                const minPrice = Math.min(...vp.map(p => p.price))
+                return { id: `variant_${i}`, title: v, description: `From ${formatPrice(minPrice)}` }
               }),
             }]
             useInteractiveList = true
-            session.data.colors = uniqueColors
-            newState = 'choose_color'
+            session.data.variants = uniqueVariants
+            newState = 'choose_variant'
           }
-        } else {
-          listBody = `📱 *${selectedModel}* - Variant select karein:`
-          listButtonText = 'Select Variant'
-          listSections = [{
-            title: `${selectedModel} Variants`,
-            rows: uniqueVariants.map((v, i) => {
-              const vp = modelProducts.filter(p => p.variant === v)
-              const minPrice = Math.min(...vp.map(p => p.price))
-              return { id: `variant_${i}`, title: v, description: `From ${formatPrice(minPrice)}` }
-            }),
-          }]
-          useInteractiveList = true
-          session.data.variants = uniqueVariants
-          newState = 'choose_variant'
         }
       } else {
-        // Check if product not available → notify agent
-        const notAvailable = !modelsList.some(m => fuzzyMatch(originalMsg, m))
-        if (notAvailable && originalMsg.length > 2) {
-          await notifyAgent(shop, from_phone, contact_name || 'Customer', originalMsg, phoneNumberId, accessToken, supabase)
+        // Customer typed something that doesn't match any model
+        if (originalMsg.length > 2) {
+          await notifyAgent(shop, from_phone, contact_name || 'Customer', originalMsg, phone_number_id, access_token, supabase)
           responseText = `😔 *${originalMsg}* abhi available nahi hai.\n\nKoi baat nahi! Humara agent aapko jaldi contact karega aur availability check karke btayega. 🙏\n\n_Reply 0 for menu_`
           newState = 'welcome'
         } else {
@@ -693,18 +732,11 @@ Deno.serve(async (req) => {
       const phoneType = (session.data.phone_type as string) || 'new'
       const selectedBrand = (session.data.selected_brand as string) || ''
       const selectedModel = (session.data.selected_model as string) || ''
-      let selectedVariant = ''
-
-      const variantIndex = msg.match(/^variant_(\d+)$/)?.[1]
-      if (variantIndex !== undefined && variantsList[parseInt(variantIndex)]) {
-        selectedVariant = variantsList[parseInt(variantIndex)]
-      } else {
-        selectedVariant = variantsList.find(v => fuzzyMatch(originalMsg, v)) || ''
-      }
+      const selectedVariant = resolveSelection(msg, originalMsg, replyId, 'variant', variantsList)
 
       if (selectedVariant) {
         session.data.selected_variant = selectedVariant
-        const variantProducts = products.filter(p =>
+        const variantProducts = availableProducts.filter(p =>
           p.brand.toLowerCase() === selectedBrand.toLowerCase() &&
           p.model.toLowerCase() === selectedModel.toLowerCase() &&
           p.variant.toLowerCase() === selectedVariant.toLowerCase() &&
@@ -712,9 +744,16 @@ Deno.serve(async (req) => {
         )
         const uniqueColors = getUniqueValues(variantProducts, 'color')
 
-        if (uniqueColors.length === 1) {
+        if (uniqueColors.length === 0) {
+          // Variant not available
+          await notifyAgent(shop, from_phone, contact_name || 'Customer', `${selectedBrand} ${selectedModel} ${selectedVariant}`, phone_number_id, access_token, supabase)
+          responseText = `😔 *${selectedModel} ${selectedVariant}* abhi available nahi hai.\n\nHumara agent aapko jaldi contact karega. 🙏\n\n_Reply 0 for menu_`
+          newState = 'welcome'
+          session.data = {}
+        } else if (uniqueColors.length === 1) {
           session.data.selected_color = uniqueColors[0]
           const product = variantProducts.find(p => p.color === uniqueColors[0])!
+          session.data.product_price = product.price
           responseText = getConfirmMessage(session.data, product)
           useInteractiveButtons = true
           interactiveButtons = [
@@ -747,18 +786,11 @@ Deno.serve(async (req) => {
       const selectedBrand = (session.data.selected_brand as string) || ''
       const selectedModel = (session.data.selected_model as string) || ''
       const selectedVariant = (session.data.selected_variant as string) || ''
-      let selectedColor = ''
-
-      const colorIndex = msg.match(/^color_(\d+)$/)?.[1]
-      if (colorIndex !== undefined && colorsList[parseInt(colorIndex)]) {
-        selectedColor = colorsList[parseInt(colorIndex)]
-      } else {
-        selectedColor = colorsList.find(c => fuzzyMatch(originalMsg, c)) || ''
-      }
+      const selectedColor = resolveSelection(msg, originalMsg, replyId, 'color', colorsList)
 
       if (selectedColor) {
         session.data.selected_color = selectedColor
-        const product = products.find(p =>
+        const product = availableProducts.find(p =>
           p.brand.toLowerCase() === selectedBrand.toLowerCase() &&
           p.model.toLowerCase() === selectedModel.toLowerCase() &&
           p.variant.toLowerCase() === selectedVariant.toLowerCase() &&
@@ -767,6 +799,7 @@ Deno.serve(async (req) => {
         )
 
         if (product) {
+          session.data.product_price = product.price
           responseText = getConfirmMessage(session.data, product)
           useInteractiveButtons = true
           interactiveButtons = [
@@ -784,10 +817,13 @@ Deno.serve(async (req) => {
     }
     // ===== CONFIRM PRODUCT =====
     else if (session.state === 'confirm_product') {
-      if (msg === 'confirm_yes' || msg === '✅ confirm order' || msg.includes('confirm') || msg.includes('yes') || msg.includes('haan') || msg.includes('ha')) {
+      const isConfirm = replyId === 'confirm_yes' || msg === 'confirm_yes' || msg.includes('✅ confirm order') || msg.includes('confirm') || msg.includes('yes') || msg.includes('haan') || msg.includes('ha')
+      const isCancel = replyId === 'confirm_no' || msg === 'confirm_no' || msg.includes('❌ cancel') || msg.includes('cancel') || msg.includes('nahi')
+      
+      if (isConfirm) {
         responseText = '👤 *Aapka naam batayein:*\n\n_Full name likhein_'
         newState = 'collect_name'
-      } else if (msg === 'confirm_no' || msg === '❌ cancel' || msg.includes('cancel') || msg.includes('nahi')) {
+      } else if (isCancel) {
         responseText = '❌ Order cancel kiya gaya.\n\n_Reply 0 for menu_'
         newState = 'welcome'
         session.data = {}
@@ -839,14 +875,7 @@ Deno.serve(async (req) => {
     // ===== CHOOSE BRANCH =====
     else if (session.state === 'choose_branch') {
       const branchesList = (session.data.branches_list as string[]) || branches.map(b => b.name)
-      let selectedBranchName = ''
-
-      const branchIndex = msg.match(/^branch_(\d+)$/)?.[1]
-      if (branchIndex !== undefined && branchesList[parseInt(branchIndex)]) {
-        selectedBranchName = branchesList[parseInt(branchIndex)]
-      } else {
-        selectedBranchName = branchesList.find(b => fuzzyMatch(originalMsg, b)) || ''
-      }
+      const selectedBranchName = resolveSelection(msg, originalMsg, replyId, 'branch', branchesList)
 
       if (selectedBranchName) {
         const branch = branches.find(b => b.name === selectedBranchName)!
@@ -883,7 +912,6 @@ Deno.serve(async (req) => {
     // ===== PAYMENT SCREENSHOT =====
     else if (session.state === 'payment_screenshot') {
       if (message_type === 'image' || message_type === 'document') {
-        // Save order to Google Sheet
         const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`
         const orderRow = [
           orderId,
@@ -901,12 +929,12 @@ Deno.serve(async (req) => {
           'Payment Received',
           new Date().toISOString().split('T')[0],
           session.data.pickup_date as string || '',
-          '', // Agent notes
+          '',
         ]
 
         await appendSheet(googleToken, shop.google_sheet_id, 'Orders!A:P', [orderRow])
 
-        // Notify agent via WhatsApp
+        // Notify agent
         if (shop.agent_notify_phone) {
           const agentMsg = `🛒 *New Order!*\n\n` +
             `Order: *${orderId}*\n` +
@@ -935,7 +963,7 @@ Deno.serve(async (req) => {
     }
     // ===== DEFAULT =====
     else {
-      const searchResult = handleFreeTextSearch(msg, products)
+      const searchResult = handleFreeTextSearch(msg, allProducts)
       if (searchResult) {
         responseText = searchResult.text
         newState = searchResult.newState || 'welcome'
@@ -963,7 +991,6 @@ Deno.serve(async (req) => {
     if (useInteractiveList && listSections.length > 0) {
       const result = await sendWhatsAppInteractiveList(phone_number_id, access_token, from_phone, listBody, listButtonText, listSections)
       waMessageId = result.waMessageId
-      // Store the list body as the message content
       await storeBotMessage(supabase, shop.user_id, null, whatsapp_number_id, from_phone, listBody, waMessageId)
     } else if (useInteractiveButtons && interactiveButtons.length > 0) {
       const result = await sendWhatsAppInteractiveButtons(phone_number_id, access_token, from_phone, responseText, interactiveButtons)
@@ -1001,13 +1028,13 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
   text: string; newState?: string; data?: Record<string, unknown>;
   list?: { body: string; button: string; sections: { title: string; rows: { id: string; title: string; description?: string }[] }[] }
 } | null {
-  // Budget search: "under 20000", "below 15000", "20000 ke andar"
+  // Budget search
   const budgetMatch = msg.match(/(?:under|below|niche|andar|upto|tak|ke\s+andar)\s*(\d+)/i) ||
     msg.match(/(\d{4,6})\s*(?:ke\s+andar|niche|below|under|tak)/i) ||
     msg.match(/best\s+(?:phone|mobile)?\s*(?:under|below)?\s*(\d+)/i)
   if (budgetMatch) {
     const budget = parseInt(budgetMatch[1])
-    const matching = products.filter(p => p.price <= budget)
+    const matching = products.filter(p => p.price <= budget && isProductAvailable(p))
     if (matching.length === 0) {
       return { text: `😔 ${formatPrice(budget)} ke under koi phone nahi mila.\n\n_Reply 0 for menu_` }
     }
@@ -1048,8 +1075,10 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
           title: `${matchedBrand} Models`,
           rows: uniqueModels.map((m, i) => {
             const mp = brandProducts.filter(p => p.model === m)
+            const availableCount = mp.filter(p => isProductAvailable(p)).length
             const minPrice = Math.min(...mp.map(p => p.price))
-            return { id: `model_${i}`, title: m, description: `From ${formatPrice(minPrice)}` }
+            const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
+            return { id: `model_${i}`, title: m, description: status }
           }),
         }],
       },
@@ -1064,7 +1093,30 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
       p.model.toLowerCase() === matchedModel.model.toLowerCase() &&
       p.brand.toLowerCase() === matchedModel.brand.toLowerCase()
     )
-    const uniqueVariants = getUniqueValues(modelProducts, 'variant')
+    const availableModelProducts = modelProducts.filter(p => isProductAvailable(p))
+    const uniqueVariants = getUniqueValues(availableModelProducts, 'variant')
+    
+    if (uniqueVariants.length === 0) {
+      // Model found but not available - still show it so choose_model handles the unavailability
+      return {
+        text: '',
+        newState: 'choose_model',
+        data: {
+          selected_brand: matchedModel.brand,
+          phone_type: matchedModel.type,
+          models: [matchedModel.model],
+        },
+        list: {
+          body: `📱 *${matchedModel.brand}* - Model:`,
+          button: 'Select Model',
+          sections: [{
+            title: `${matchedModel.brand} Models`,
+            rows: [{ id: 'model_0', title: matchedModel.model, description: '⚠️ Currently Unavailable' }],
+          }],
+        },
+      }
+    }
+    
     return {
       text: '',
       newState: 'choose_variant',
@@ -1080,7 +1132,7 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
         sections: [{
           title: `${matchedModel.model} Variants`,
           rows: uniqueVariants.map((v, i) => {
-            const vp = modelProducts.filter(p => p.variant === v)
+            const vp = availableModelProducts.filter(p => p.variant === v)
             const minPrice = Math.min(...vp.map(p => p.price))
             return { id: `variant_${i}`, title: v, description: `From ${formatPrice(minPrice)}` }
           }),
@@ -1100,18 +1152,16 @@ function getDefaultWelcome(shopName: string, language: string): string {
   if (language === 'english') {
     return `Welcome to *${shopName}*! 📱\n\nAre you looking for a new phone, second-hand, or searching for a specific brand/model?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Search Model`
   }
-  // Hinglish default
   return `🙏 *${shopName}* me aapka swagat hai!\n\nKya aap naya mobile dekh rahe hai, second hand, ya koi brand/model chahiye?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Search Model`
 }
 
 function getConfirmMessage(data: Record<string, unknown>, product: Product): string {
-  const d = data
   return `✅ *Order Summary:*\n\n` +
-    `📱 *${d.selected_brand} ${d.selected_model}*\n` +
-    `📦 Variant: ${d.selected_variant}\n` +
-    `🎨 Color: ${d.selected_color}\n` +
+    `📱 *${data.selected_brand} ${data.selected_model}*\n` +
+    `📦 Variant: ${data.selected_variant}\n` +
+    `🎨 Color: ${data.selected_color}\n` +
     `💰 Price: ${formatPrice(product.price)}\n` +
-    `📋 Type: ${(d.phone_type as string) === 'new' ? 'New' : 'Second Hand'}\n\n` +
+    `📋 Type: ${(data.phone_type as string) === 'new' ? 'New' : 'Second Hand'}\n\n` +
     `Kya aap order confirm karna chahte hai?`
 }
 

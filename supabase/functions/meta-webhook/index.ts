@@ -303,7 +303,7 @@ async function processIncomingMessage(
   })
 
   // Trigger automation bots if configured for this number
-  if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document' || message.type === 'contacts')) {
+  if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document' || message.type === 'contacts' || message.type === 'interactive' || message.type === 'button')) {
     // Build media info
     let mediaInfo: { type: string; id: string; mime_type: string; filename?: string } | null = null
     if (message.type === 'image' && message.image) {
@@ -312,6 +312,14 @@ async function processIncomingMessage(
       mediaInfo = { type: 'document', id: message.document.id, mime_type: message.document.mime_type, filename: message.document.filename }
     } else if (message.type === 'contacts' && message.contacts?.length) {
       mediaInfo = { type: 'contacts', id: `contact_${Date.now()}`, mime_type: 'text/vcard', filename: 'contact.vcf' }
+    }
+
+    // Extract interactive reply ID for bot matching
+    let interactiveReplyId: string | null = null
+    if (message.type === 'interactive') {
+      interactiveReplyId = message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || null
+    } else if (message.type === 'button') {
+      interactiveReplyId = message.button?.payload || null
     }
 
     const botPayload = {
@@ -323,6 +331,7 @@ async function processIncomingMessage(
       message_type: message.type,
       media_info: mediaInfo,
       contact_name: contactName,
+      interactive_reply_id: interactiveReplyId,
     }
 
     const authHeaders = {

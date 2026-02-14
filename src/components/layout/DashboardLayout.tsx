@@ -231,14 +231,12 @@ export function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
         <header className={cn(
-          "h-16 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-card",
-          // Hide header on mobile when on chat page (chat has its own header)
-          location.pathname === '/dashboard/chat' && "hidden lg:flex"
+          "h-16 flex items-center justify-between px-4 lg:px-6 border-b border-border bg-card flex-shrink-0"
         )}>
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden"
+            className="lg:hidden flex-shrink-0"
             onClick={() => setMobileMenuOpen(true)}
           >
             <Menu className="h-5 w-5" />
@@ -305,7 +303,7 @@ export function DashboardLayout() {
         {/* Page Content - extra padding bottom for mobile nav, none on chat page */}
         <main className={cn(
           "flex-1 min-h-0 lg:pb-0",
-          location.pathname === '/dashboard/chat' ? "pb-0 overflow-hidden flex flex-col" : "pb-16 overflow-auto"
+          location.pathname === '/dashboard/chat' ? "pb-0 overflow-hidden" : "pb-16 overflow-auto"
         )}>
           <Outlet />
         </main>

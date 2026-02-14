@@ -199,13 +199,19 @@ export function TemplateForm({
                 <Input
                   id="template_name"
                   value={formData.template_name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, template_name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    // Auto-format: lowercase, replace spaces/special chars with underscore
+                    const formatted = e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9_]/g, '_')
+                      .replace(/_+/g, '_');
+                    setFormData((prev) => ({ ...prev, template_name: formatted }));
+                  }}
                   placeholder="e.g., welcome_message"
                   pattern="[a-z0-9_]+"
                   disabled={!isEditable}
                 />
+                <p className="text-xs text-muted-foreground">Only lowercase letters, numbers, and underscores</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="category">Category *</Label>

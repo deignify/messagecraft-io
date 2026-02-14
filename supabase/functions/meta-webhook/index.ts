@@ -302,59 +302,60 @@ async function processIncomingMessage(
     status: 'delivered',
   })
 
-  // Trigger hotel bot automation if hotel exists for this number
-  // Handle text messages, media (images/documents), and contacts for ID upload
+  // Trigger automation bots if configured for this number
   if (supabaseUrl && (message.type === 'text' || message.type === 'image' || message.type === 'document' || message.type === 'contacts')) {
+    // Build media info
+    let mediaInfo: { type: string; id: string; mime_type: string; filename?: string } | null = null
+    if (message.type === 'image' && message.image) {
+      mediaInfo = { type: 'image', id: message.image.id, mime_type: message.image.mime_type }
+    } else if (message.type === 'document' && message.document) {
+      mediaInfo = { type: 'document', id: message.document.id, mime_type: message.document.mime_type, filename: message.document.filename }
+    } else if (message.type === 'contacts' && message.contacts?.length) {
+      mediaInfo = { type: 'contacts', id: `contact_${Date.now()}`, mime_type: 'text/vcard', filename: 'contact.vcf' }
+    }
+
+    const botPayload = {
+      whatsapp_number_id: waNumber.id,
+      phone_number_id: waNumber.phone_number_id,
+      access_token: waNumber.access_token,
+      from_phone: contactPhone,
+      message_text: messageContent,
+      message_type: message.type,
+      media_info: mediaInfo,
+      contact_name: contactName,
+    }
+
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+    }
+
+    // Try hotel bot
     try {
       console.log('Triggering hotel bot for message:', messageContent, 'type:', message.type)
-      
-      // Build media info for image/document/contacts uploads
-      let mediaInfo: { type: string; id: string; mime_type: string; filename?: string } | null = null
-      if (message.type === 'image' && message.image) {
-        mediaInfo = {
-          type: 'image',
-          id: message.image.id,
-          mime_type: message.image.mime_type,
-        }
-      } else if (message.type === 'document' && message.document) {
-        mediaInfo = {
-          type: 'document',
-          id: message.document.id,
-          mime_type: message.document.mime_type,
-          filename: message.document.filename,
-        }
-      } else if (message.type === 'contacts' && message.contacts?.length) {
-        // For contacts, we'll save the vCard data as text
-        // Meta doesn't provide a media ID for contacts, so we handle differently
-        mediaInfo = {
-          type: 'contacts',
-          id: `contact_${Date.now()}`,
-          mime_type: 'text/vcard',
-          filename: 'contact.vcf',
-        }
-      }
-      
       const botResponse = await fetch(`${supabaseUrl}/functions/v1/hotel-bot`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-        },
-        body: JSON.stringify({
-          whatsapp_number_id: waNumber.id,
-          phone_number_id: waNumber.phone_number_id,
-          access_token: waNumber.access_token,
-          from_phone: contactPhone,
-          message_text: messageContent,
-          message_type: message.type,
-          media_info: mediaInfo,
-          contact_name: contactName,
-        }),
+        headers: authHeaders,
+        body: JSON.stringify(botPayload),
       })
       const botResult = await botResponse.json()
       console.log('Hotel bot response:', botResult)
     } catch (botError) {
       console.error('Hotel bot error:', botError)
+    }
+
+    // Try mobile shop bot
+    try {
+      console.log('Triggering mobile shop bot for message:', messageContent)
+      const shopBotResponse = await fetch(`${supabaseUrl}/functions/v1/mobile-shop-bot`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify(botPayload),
+      })
+      const shopBotResult = await shopBotResponse.json()
+      console.log('Mobile shop bot response:', shopBotResult)
+    } catch (botError) {
+      console.error('Mobile shop bot error:', botError)
     }
   }
 }

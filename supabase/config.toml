@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.meta-oauth]
 verify_jwt = false
+
+[functions.mobile-shop-bot]
+verify_jwt = false

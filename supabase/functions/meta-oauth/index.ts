@@ -187,23 +187,6 @@ Deno.serve(async (req) => {
       const accessToken = longLivedData.access_token || tokenData.access_token
       const expiresIn = longLivedData.expires_in || tokenData.expires_in
 
-      // Get WhatsApp Business Accounts
-      const wabaResponse = await fetch(
-        `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      )
-      const wabaData = await wabaResponse.json()
-
-      if (!wabaResponse.ok) {
-        console.error('Failed to fetch WABA:', wabaData)
-        const returnUrl = new URL(returnUrlString, url.origin)
-        returnUrl.searchParams.set('error', 'waba_fetch_failed')
-        return new Response(null, {
-          status: 302,
-          headers: { ...corsHeaders, 'Location': returnUrl.toString() }
-        })
-      }
-
       // If we don't have a user_id from state, we can't store - redirect with error
       if (!stateData.user_id) {
         const returnUrl = new URL(returnUrlString, url.origin)
@@ -219,36 +202,108 @@ Deno.serve(async (req) => {
       const allWabaIds: string[] = []
       const accountType = stateData.account_type || 'cloud_api'
 
-      // Extract phone numbers from all WABAs
-      for (const business of wabaData.data || []) {
-        for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
-          allWabaIds.push(waba.id)
-          for (const phone of waba.phone_numbers?.data || []) {
-            // Store each phone number in the database
+      // Use debug_token to find shared WABA IDs (works without business_management scope)
+      const appToken = `${META_APP_ID}|${META_APP_SECRET}`
+      const debugResponse = await fetch(
+        `https://graph.facebook.com/v23.0/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
+      )
+      const debugData = await debugResponse.json()
+      console.log('[OAuth] debug_token response:', JSON.stringify(debugData?.data?.granular_scopes))
+
+      // Extract WABA IDs from granular_scopes
+      const wabaIds: string[] = []
+      if (debugData?.data?.granular_scopes) {
+        for (const scope of debugData.data.granular_scopes) {
+          if (scope.scope === 'whatsapp_business_management' && scope.target_ids) {
+            wabaIds.push(...scope.target_ids)
+          }
+        }
+      }
+
+      // Fallback: try me/businesses if debug_token didn't yield WABA IDs
+      if (wabaIds.length === 0) {
+        console.log('[OAuth] No WABAs from debug_token, trying me/businesses fallback')
+        const wabaResponse = await fetch(
+          `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
+        const wabaData = await wabaResponse.json()
+
+        if (wabaResponse.ok && wabaData.data) {
+          for (const business of wabaData.data) {
+            for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+              allWabaIds.push(waba.id)
+              for (const phone of waba.phone_numbers?.data || []) {
+                const { error } = await supabase.from('whatsapp_numbers').upsert({
+                  user_id: stateData.user_id,
+                  phone_number: phone.display_phone_number,
+                  display_name: phone.verified_name,
+                  waba_id: waba.id,
+                  phone_number_id: phone.id,
+                  access_token: accessToken,
+                  token_expires_at: expiresIn 
+                    ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+                    : null,
+                  status: 'active',
+                  business_name: business.name,
+                  quality_rating: phone.quality_rating,
+                  account_type: accountType,
+                }, {
+                  onConflict: 'phone_number_id',
+                  ignoreDuplicates: false 
+                })
+                if (!error) numbersStored++
+                else console.error('Failed to store phone number:', error)
+              }
+            }
+          }
+        } else {
+          console.error('Fallback me/businesses also failed:', wabaData)
+          const returnUrl = new URL(returnUrlString, url.origin)
+          returnUrl.searchParams.set('error', 'waba_fetch_failed')
+          return new Response(null, {
+            status: 302,
+            headers: { ...corsHeaders, 'Location': returnUrl.toString() }
+          })
+        }
+      } else {
+        // Query each WABA directly using the IDs from debug_token
+        console.log(`[OAuth] Found ${wabaIds.length} WABA(s) from debug_token: ${wabaIds.join(', ')}`)
+        for (const wabaId of wabaIds) {
+          allWabaIds.push(wabaId)
+          const wabaDetailResponse = await fetch(
+            `https://graph.facebook.com/v23.0/${wabaId}?fields=id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          const wabaDetail = await wabaDetailResponse.json()
+          
+          if (!wabaDetailResponse.ok) {
+            console.error(`Failed to fetch WABA ${wabaId}:`, wabaDetail)
+            continue
+          }
+
+          const businessName = wabaDetail.name || 'Unknown Business'
+          for (const phone of wabaDetail.phone_numbers?.data || []) {
             const { error } = await supabase.from('whatsapp_numbers').upsert({
               user_id: stateData.user_id,
               phone_number: phone.display_phone_number,
               display_name: phone.verified_name,
-              waba_id: waba.id,
+              waba_id: wabaId,
               phone_number_id: phone.id,
               access_token: accessToken,
               token_expires_at: expiresIn 
                 ? new Date(Date.now() + expiresIn * 1000).toISOString() 
                 : null,
               status: 'active',
-              business_name: business.name,
+              business_name: businessName,
               quality_rating: phone.quality_rating,
               account_type: accountType,
             }, {
               onConflict: 'phone_number_id',
               ignoreDuplicates: false 
             })
-
-            if (error) {
-              console.error('Failed to store phone number:', error)
-            } else {
-              numbersStored++
-            }
+            if (!error) numbersStored++
+            else console.error('Failed to store phone number:', error)
           }
         }
       }
@@ -568,17 +623,13 @@ Deno.serve(async (req) => {
       const accessToken = longLivedData.access_token || tokenData.access_token
       const expiresIn = longLivedData.expires_in || tokenData.expires_in
 
-      // Get WhatsApp Business Accounts
-      const wabaResponse = await fetch(
-        `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+      // Use debug_token to find shared WABA IDs (works without business_management scope)
+      const appToken = `${META_APP_ID}|${META_APP_SECRET}`
+      const debugResponse = await fetch(
+        `https://graph.facebook.com/v23.0/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appToken)}`
       )
-      const wabaData = await wabaResponse.json()
-
-      if (!wabaResponse.ok) {
-        console.error('Failed to fetch WABA:', wabaData)
-        throw new Error('Failed to fetch WhatsApp Business Accounts')
-      }
+      const debugData = await debugResponse.json()
+      console.log('[SDK OAuth] debug_token granular_scopes:', JSON.stringify(debugData?.data?.granular_scopes))
 
       const sdkAccountType = account_type || 'business_app'
       const phoneNumbers: Array<{
@@ -590,40 +641,101 @@ Deno.serve(async (req) => {
       }> = []
       const allWabaIds: string[] = []
 
-      for (const business of wabaData.data || []) {
-        for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
-          allWabaIds.push(waba.id)
-          for (const phone of waba.phone_numbers?.data || []) {
+      // Extract WABA IDs from granular_scopes
+      const wabaIds: string[] = []
+      if (debugData?.data?.granular_scopes) {
+        for (const scope of debugData.data.granular_scopes) {
+          if (scope.scope === 'whatsapp_business_management' && scope.target_ids) {
+            wabaIds.push(...scope.target_ids)
+          }
+        }
+      }
+
+      if (wabaIds.length === 0) {
+        // Fallback: try me/businesses
+        console.log('[SDK OAuth] No WABAs from debug_token, trying me/businesses fallback')
+        const wabaResponse = await fetch(
+          `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        )
+        const wabaData = await wabaResponse.json()
+
+        if (wabaResponse.ok && wabaData.data) {
+          for (const business of wabaData.data) {
+            for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+              allWabaIds.push(waba.id)
+              for (const phone of waba.phone_numbers?.data || []) {
+                const { error } = await supabase.from('whatsapp_numbers').upsert({
+                  user_id: claimsData.user.id,
+                  phone_number: phone.display_phone_number,
+                  display_name: phone.verified_name,
+                  waba_id: waba.id,
+                  phone_number_id: phone.id,
+                  access_token: accessToken,
+                  token_expires_at: expiresIn 
+                    ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+                    : null,
+                  status: 'active',
+                  business_name: business.name,
+                  quality_rating: phone.quality_rating,
+                  account_type: sdkAccountType,
+                }, { onConflict: 'phone_number_id', ignoreDuplicates: false })
+                if (!error) {
+                  phoneNumbers.push({
+                    phone_number: phone.display_phone_number,
+                    display_name: phone.verified_name,
+                    waba_id: waba.id,
+                    phone_number_id: phone.id,
+                    quality_rating: phone.quality_rating,
+                  })
+                } else console.error('Failed to store phone number:', error)
+              }
+            }
+          }
+        } else {
+          console.error('Fallback me/businesses also failed:', wabaData)
+          throw new Error('Failed to fetch WhatsApp Business Accounts')
+        }
+      } else {
+        // Query each WABA directly
+        console.log(`[SDK OAuth] Found ${wabaIds.length} WABA(s): ${wabaIds.join(', ')}`)
+        for (const wabaId of wabaIds) {
+          allWabaIds.push(wabaId)
+          const wabaDetailResponse = await fetch(
+            `https://graph.facebook.com/v23.0/${wabaId}?fields=id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          const wabaDetail = await wabaDetailResponse.json()
+          if (!wabaDetailResponse.ok) {
+            console.error(`Failed to fetch WABA ${wabaId}:`, wabaDetail)
+            continue
+          }
+          const businessName = wabaDetail.name || 'Unknown Business'
+          for (const phone of wabaDetail.phone_numbers?.data || []) {
             const { error } = await supabase.from('whatsapp_numbers').upsert({
               user_id: claimsData.user.id,
               phone_number: phone.display_phone_number,
               display_name: phone.verified_name,
-              waba_id: waba.id,
+              waba_id: wabaId,
               phone_number_id: phone.id,
               access_token: accessToken,
               token_expires_at: expiresIn 
                 ? new Date(Date.now() + expiresIn * 1000).toISOString() 
                 : null,
               status: 'active',
-              business_name: business.name,
+              business_name: businessName,
               quality_rating: phone.quality_rating,
               account_type: sdkAccountType,
-            }, {
-              onConflict: 'phone_number_id',
-              ignoreDuplicates: false 
-            })
-
-            if (error) {
-              console.error('Failed to store phone number:', error)
-            }
-
-            phoneNumbers.push({
-              phone_number: phone.display_phone_number,
-              display_name: phone.verified_name,
-              waba_id: waba.id,
-              phone_number_id: phone.id,
-              quality_rating: phone.quality_rating,
-            })
+            }, { onConflict: 'phone_number_id', ignoreDuplicates: false })
+            if (!error) {
+              phoneNumbers.push({
+                phone_number: phone.display_phone_number,
+                display_name: phone.verified_name,
+                waba_id: wabaId,
+                phone_number_id: phone.id,
+                quality_rating: phone.quality_rating,
+              })
+            } else console.error('Failed to store phone number:', error)
           }
         }
       }

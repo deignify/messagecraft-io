@@ -170,7 +170,17 @@ export default function WhatsAppNumbers() {
   const handleBusinessAppRedirectFallback = () => {
     if (!session?.access_token) return;
 
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
+    const edgeFunctionUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
     const returnUrl = `${window.location.origin}/dashboard/numbers`;
+
+    // Build state for the redirect callback
+    const state = btoa(JSON.stringify({
+      user_id: session.user?.id,
+      timestamp: Date.now(),
+      return_url: returnUrl,
+      account_type: 'business_app',
+    }));
 
     const extras = JSON.stringify({
       setup: { solutionID: META_APP_ID },
@@ -186,8 +196,10 @@ export default function WhatsAppNumbers() {
     authUrl.searchParams.set('extras', extras);
     authUrl.searchParams.set('response_type', 'code');
     authUrl.searchParams.set('override_default_response_type', 'true');
+    authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging');
+    authUrl.searchParams.set('state', state);
     authUrl.searchParams.set('fallback_redirect_uri', returnUrl);
-    authUrl.searchParams.set('redirect_uri', returnUrl);
+    authUrl.searchParams.set('redirect_uri', edgeFunctionUrl);
 
     // Open in popup to match Embedded Signup behavior
     const width = 600;
@@ -220,6 +232,7 @@ export default function WhatsAppNumbers() {
         try {
           window.FB.login(
             async (response: any) => {
+              console.log('[FB SDK] Login response:', JSON.stringify(response));
               if (response.authResponse?.code) {
                 const code = response.authResponse.code;
                 toast.loading('Connecting your WhatsApp Business...', { id: 'fb-connect' });
@@ -256,8 +269,10 @@ export default function WhatsAppNumbers() {
                   toast.error('Failed to connect WhatsApp Business. Please try again.', { id: 'fb-connect' });
                 }
               } else {
-                console.log('FB login cancelled or no code returned', response);
-                if (response.status !== 'unknown') {
+                console.log('[FB SDK] Login cancelled or no code returned', response);
+                if (response.status === 'not_authorized') {
+                  toast.error('App not authorized. Please approve all permissions.');
+                } else if (response.status !== 'unknown') {
                   toast.error('Connection cancelled or failed.');
                 }
               }
@@ -267,6 +282,8 @@ export default function WhatsAppNumbers() {
               config_id: META_CONFIG_ID,
               response_type: 'code',
               override_default_response_type: true,
+              scope: 'business_management,whatsapp_business_management,whatsapp_business_messaging',
+              auth_type: 'reauthorize',
               extras: {
                 setup: {
                   solutionID: META_APP_ID,

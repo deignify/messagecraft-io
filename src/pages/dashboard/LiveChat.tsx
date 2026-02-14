@@ -570,46 +570,61 @@ export default function LiveChat() {
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="h-14 md:h-16 px-2 md:px-4 flex items-center justify-between border-b border-border bg-card">
-              <div className="flex items-center gap-2 md:gap-3">
+            <div className="h-[56px] md:h-16 px-1 md:px-4 flex items-center justify-between border-b border-border bg-card">
+              <div className="flex items-center gap-1.5 md:gap-3 flex-1 min-w-0">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="md:hidden flex-shrink-0"
+                  className="md:hidden flex-shrink-0 h-9 w-9"
                   onClick={() => setSelectedConversation(null)}
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <Avatar className="h-9 w-9 md:h-10 md:w-10">
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                    {selectedConversation.contact_name?.[0] || selectedConversation.contact_phone[0]}
+                <Avatar className="h-10 w-10 md:h-10 md:w-10 flex-shrink-0">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                    {(selectedConversation.contact_name || selectedConversation.contact_phone).slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0">
-                  <h3 className="font-medium text-foreground text-sm md:text-base truncate">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-foreground text-[15px] md:text-base truncate leading-tight">
                     {selectedConversation.contact_name || selectedConversation.contact_phone}
                   </h3>
-                  <p className="text-xs text-muted-foreground">{selectedConversation.contact_phone}</p>
+                  <p className="text-[12px] text-muted-foreground leading-tight mt-0.5 truncate">
+                    {selectedConversation.contact_name 
+                      ? selectedConversation.contact_phone 
+                      : 'WhatsApp Contact'}
+                  </p>
                 </div>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreVertical className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuItem onClick={() => setShowTemplateDialog(true)}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Send Template
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-muted-foreground">
-                    <Phone className="h-4 w-4 mr-2" />
-                    {selectedConversation.contact_phone}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setShowTemplateDialog(true)}
+                  title="Send Template"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9">
+                      <MoreVertical className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => setShowTemplateDialog(true)}>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Send Template
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-muted-foreground">
+                      <Phone className="h-4 w-4 mr-2" />
+                      {selectedConversation.contact_phone}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
             {/* Messages */}

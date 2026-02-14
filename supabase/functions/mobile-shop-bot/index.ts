@@ -498,7 +498,7 @@ Deno.serve(async (req) => {
       interactiveButtons = [
         { id: 'new_phone', title: '📱 New Phone' },
         { id: 'secondhand', title: '♻️ Second Hand' },
-        { id: 'search', title: '🔍 Search Model' },
+        { id: 'budget_search', title: '💰 Budget Search' },
       ]
       newState = 'welcome'
       session.data = {}
@@ -507,7 +507,8 @@ Deno.serve(async (req) => {
     else if (session.state === 'welcome') {
       const isNewPhone = replyId === 'new_phone' || msg === 'new_phone' || msg === 'new phone' || msg === 'new' || msg === '1' || msg.includes('📱 new phone') || msg.includes('new') || msg.includes('naya') || msg.includes('nya')
       const isSecondHand = replyId === 'secondhand' || msg === 'secondhand' || msg === 'second hand' || msg === 'second' || msg === '2' || msg.includes('♻️ second hand') || msg.includes('second') || msg.includes('purana') || msg.includes('used')
-      const isSearch = replyId === 'search' || msg === 'search' || msg === '3' || msg.includes('🔍 search model') || msg.includes('search') || msg.includes('find') || msg.includes('dhundo')
+      const isBudgetSearch = replyId === 'budget_search' || msg === 'budget_search' || msg === 'budget' || msg === '3' || msg.includes('💰 budget') || msg.includes('budget')
+      const isSearch = msg === 'search' || msg.includes('search') || msg.includes('find') || msg.includes('dhundo') || msg.includes('🔍')
 
       if (isNewPhone) {
         session.data.phone_type = 'new'
@@ -554,26 +555,131 @@ Deno.serve(async (req) => {
           session.data.brands = uniqueBrands
         }
       }
+      else if (isBudgetSearch) {
+        responseText = '💰 *Budget Search*\n\nApna budget type karein (sirf number):\n\n_Example: 15000_'
+        newState = 'budget_input'
+      }
       else if (isSearch) {
-        responseText = '🔍 *Search karo!*\n\nBrand name, model name, ya budget type karein:\n\n_Examples:_\n• _"iPhone"_\n• _"Samsung"_\n• _"best phone under 20000"_\n• _"iPhone 16 Pro"_'
+        responseText = '🔍 *Search karo!*\n\nBrand name ya model name type karein:\n\n_Examples:_\n• _"iPhone"_\n• _"Samsung"_\n• _"iPhone 16 Pro"_'
         newState = 'free_search'
       }
       else {
-        // Try to detect intent from free text
-        const searchResult = handleFreeTextSearch(msg, allProducts)
-        if (searchResult) {
-          responseText = searchResult.text
-          newState = searchResult.newState || 'welcome'
-          if (searchResult.data) session.data = { ...session.data, ...searchResult.data }
-          if (searchResult.list) {
+        // Check if user typed a number directly (budget)
+        const directBudget = msg.match(/^\d{4,7}$/)
+        if (directBudget) {
+          const budget = parseInt(directBudget[0])
+          const budgetProducts = allProducts.filter(p => p.price <= budget)
+          if (budgetProducts.length === 0) {
+            responseText = `😔 ${formatPrice(budget)} ke under koi phone nahi mila.\n\n_Reply 0 for menu_`
+          } else {
+            const uniqueBrands = getUniqueValues(budgetProducts, 'brand')
+            listBody = `💰 *Under ${formatPrice(budget)}* - Brand select karein:`
+            listButtonText = 'Select Brand'
+            listSections = [{
+              title: `Brands under ${formatPrice(budget)}`,
+              rows: uniqueBrands.slice(0, 10).map((b, i) => {
+                const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
+                const modelCount = new Set(bProducts.map(p => p.model)).size
+                return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
+              }),
+            }]
             useInteractiveList = true
-            listBody = searchResult.list.body
-            listButtonText = searchResult.list.button
-            listSections = searchResult.list.sections
+            session.data.budget = budget
+            session.data.budget_brands = uniqueBrands
+            newState = 'budget_brands'
           }
         } else {
-          responseText = '🤔 Samajh nahi aaya. Kripya button dabayein ya brand/model name likhein.\n\n_Reply 0 for menu_'
+          // Try to detect intent from free text
+          const searchResult = handleFreeTextSearch(msg, allProducts)
+          if (searchResult) {
+            responseText = searchResult.text
+            newState = searchResult.newState || 'welcome'
+            if (searchResult.data) session.data = { ...session.data, ...searchResult.data }
+            if (searchResult.list) {
+              useInteractiveList = true
+              listBody = searchResult.list.body
+              listButtonText = searchResult.list.button
+              listSections = searchResult.list.sections
+            }
+          } else {
+            responseText = '🤔 Samajh nahi aaya. Kripya button dabayein ya brand/model name likhein.\n\n_Reply 0 for menu_'
+          }
         }
+      }
+    }
+    // ===== BUDGET INPUT STATE =====
+    else if (session.state === 'budget_input') {
+      const budgetNum = msg.match(/\d+/)
+      if (budgetNum) {
+        const budget = parseInt(budgetNum[0])
+        if (budget < 500) {
+          responseText = '❌ Budget bahut kam hai. Thoda zyada amount enter karein.\n\n_Example: 10000_'
+        } else {
+          const budgetProducts = allProducts.filter(p => p.price <= budget)
+          if (budgetProducts.length === 0) {
+            responseText = `😔 ${formatPrice(budget)} ke under koi phone nahi mila.\n\nZyada budget try karein ya _0 for menu_`
+          } else {
+            const uniqueBrands = getUniqueValues(budgetProducts, 'brand')
+            listBody = `💰 *Under ${formatPrice(budget)}* - Brand select karein:`
+            listButtonText = 'Select Brand'
+            listSections = [{
+              title: `Brands under ${formatPrice(budget)}`,
+              rows: uniqueBrands.slice(0, 10).map((b, i) => {
+                const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
+                const modelCount = new Set(bProducts.map(p => p.model)).size
+                return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
+              }),
+            }]
+            useInteractiveList = true
+            session.data.budget = budget
+            session.data.budget_brands = uniqueBrands
+            newState = 'budget_brands'
+          }
+        }
+      } else {
+        responseText = '❌ Sirf number likhein. Example: _15000_'
+      }
+    }
+    // ===== BUDGET BRANDS - SELECT BRAND WITHIN BUDGET =====
+    else if (session.state === 'budget_brands') {
+      const brandsList = (session.data.budget_brands as string[]) || []
+      const budget = (session.data.budget as number) || 0
+      const selectedBrand = resolveSelection(msg, originalMsg, replyId, 'bbudget', brandsList)
+
+      if (selectedBrand) {
+        const budgetBrandProducts = allProducts.filter(p =>
+          p.brand.toLowerCase() === selectedBrand.toLowerCase() && p.price <= budget
+        )
+        const uniqueModels = [...new Set(budgetBrandProducts.map(p => p.model))]
+
+        if (uniqueModels.length === 0) {
+          responseText = `❌ ${selectedBrand} ke ${formatPrice(budget)} ke under koi model nahi mila.\n\n_Reply 0 for menu_`
+          newState = 'welcome'
+        } else {
+          listBody = `💰 *${selectedBrand} under ${formatPrice(budget)}*:`
+          listButtonText = 'Select Model'
+          listSections = [{
+            title: `${selectedBrand} Models`,
+            rows: uniqueModels.slice(0, 10).map((m, i) => {
+              const mp = budgetBrandProducts.filter(p => p.model === m)
+              const minPrice = Math.min(...mp.map(p => p.price))
+              const types = [...new Set(mp.map(p => p.type))]
+              const typeLabel = types.map(t => t === 'new' ? '🆕 New' : '♻️ 2nd Hand').join(' | ')
+              const availableCount = mp.filter(p => isProductAvailable(p)).length
+              const status = availableCount > 0
+                ? `${formatPrice(minPrice)} | ${typeLabel}`
+                : `⚠️ Unavailable | ${typeLabel}`
+              return { id: `model_${i}`, title: m, description: status }
+            }),
+          }]
+          useInteractiveList = true
+          session.data.selected_brand = selectedBrand
+          session.data.phone_type = budgetBrandProducts[0].type
+          session.data.models = uniqueModels
+          newState = 'choose_model'
+        }
+      } else {
+        responseText = '❌ Brand nahi mila. List se select karein ya _0 for menu_'
       }
     }
     // ===== FREE SEARCH STATE =====
@@ -661,7 +767,7 @@ Deno.serve(async (req) => {
           interactiveButtons = [
             { id: 'new_phone', title: '📱 New Phone' },
             { id: 'secondhand', title: '♻️ Second Hand' },
-            { id: 'search', title: '🔍 Search Model' },
+            { id: 'budget_search', title: '💰 Budget Search' },
           ]
           newState = 'welcome'
           session.data = {}
@@ -1272,12 +1378,12 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
 // ============ HELPERS ============
 function getDefaultWelcome(shopName: string, language: string): string {
   if (language === 'hindi') {
-    return `🙏 *${shopName}* में आपका स्वागत है!\n\nक्या आप नया मोबाइल देख रहे हैं, सेकंड हैंड, या आपको कोई ब्रांड/मॉडल चाहिए?\n\n1️⃣ नया फोन\n2️⃣ सेकंड हैंड\n3️⃣ सर्च करें`
+    return `🙏 *${shopName}* में आपका स्वागत है!\n\nक्या आप नया मोबाइल देख रहे हैं, सेकंड हैंड, या बजट में फोन चाहिए?\n\n1️⃣ नया फोन\n2️⃣ सेकंड हैंड\n3️⃣ बजट सर्च`
   }
   if (language === 'english') {
-    return `Welcome to *${shopName}*! 📱\n\nAre you looking for a new phone, second-hand, or searching for a specific brand/model?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Search Model`
+    return `Welcome to *${shopName}*! 📱\n\nAre you looking for a new phone, second-hand, or search by budget?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Budget Search`
   }
-  return `🙏 *${shopName}* me aapka swagat hai!\n\nKya aap naya mobile dekh rahe hai, second hand, ya koi brand/model chahiye?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Search Model`
+  return `🙏 *${shopName}* me aapka swagat hai!\n\nKya aap naya mobile dekh rahe hai, second hand, ya budget me phone chahiye?\n\n1️⃣ New Phone\n2️⃣ Second Hand\n3️⃣ Budget Search`
 }
 
 function getConfirmMessage(data: Record<string, unknown>, product: Product): string {

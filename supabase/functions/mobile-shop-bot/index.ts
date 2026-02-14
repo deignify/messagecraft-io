@@ -489,8 +489,22 @@ Deno.serve(async (req) => {
     const availableProducts = allProducts.filter(p => isProductAvailable(p))
     const branches = getBranches(branchRows)
 
+    // ===== GRATITUDE / THANKS REPLIES =====
+    const thanksKeywords = ['thanks', 'thank you', 'thanku', 'thnx', 'thnks', 'thx', 'ty', 'shukriya', 'dhanyavaad', 'dhanyawad', 'bahut accha', 'great', 'awesome', 'nice', 'superb', 'perfect', 'okay thanks', 'ok thanks', 'thank u']
+    const isThanks = thanksKeywords.some(k => msg === k || msg.startsWith(k + ' ') || msg.endsWith(' ' + k))
+
+    if (isThanks) {
+      const thankReplies = [
+        `🙏 It's our pleasure! Thank you for choosing *${shop.name}*. We're always here to help you! 😊\n\n_Type 0 for main menu_`,
+        `😊 You're most welcome! Happy to assist you. Feel free to reach out anytime!\n\n🏪 *${shop.name}* - Always at your service.\n\n_Type 0 for main menu_`,
+        `🙏 Aapka bahut bahut shukriya! Hum hamesha aapki seva mein hain. 😊\n\n*${shop.name}* mein aapka swagat hai!\n\n_Type 0 for main menu_`,
+        `😊 Thank you ji! It was our pleasure serving you. Do visit us again! 🙌\n\n*${shop.name}* - Your trusted mobile partner.\n\n_Type 0 for main menu_`,
+      ]
+      responseText = thankReplies[Math.floor(Math.random() * thankReplies.length)]
+      // Don't change state - keep current session intact
+    }
     // ===== RESET COMMANDS =====
-    if (msg === '0' || msg === 'menu' || msg === 'hi' || msg === 'hello' || msg === 'start' || msg === 'reset') {
+    else if (msg === '0' || msg === 'menu' || msg === 'hi' || msg === 'hello' || msg === 'start' || msg === 'reset') {
       const lang = shop.language || 'hinglish'
       const welcomeMsg = shop.welcome_message || getDefaultWelcome(shop.name, lang)
       responseText = welcomeMsg

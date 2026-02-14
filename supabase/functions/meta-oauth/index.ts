@@ -511,6 +511,147 @@ Deno.serve(async (req) => {
       })
     }
 
+    // SDK callback - exchange code from Facebook JS SDK (Embedded Signup)
+    // For JS SDK codes, redirect_uri is not needed for token exchange
+    if (action === 'sdk-callback') {
+      const authHeader = req.headers.get('Authorization')
+      if (!authHeader?.startsWith('Bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        })
+      }
+
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      const token = authHeader.replace('Bearer ', '')
+      const { data: claimsData, error: claimsError } = await supabase.auth.getUser(token)
+      
+      if (claimsError || !claimsData.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        })
+      }
+
+      const body = await req.json()
+      const { code, account_type } = body
+
+      if (!code) {
+        throw new Error('Missing required parameter: code')
+      }
+
+      // Exchange code for access token - JS SDK codes don't need redirect_uri
+      const tokenUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
+      tokenUrl.searchParams.set('client_id', META_APP_ID)
+      tokenUrl.searchParams.set('client_secret', META_APP_SECRET)
+      tokenUrl.searchParams.set('code', code)
+      tokenUrl.searchParams.set('redirect_uri', '') // empty for JS SDK
+
+      const tokenResponse = await fetch(tokenUrl.toString())
+      const tokenData: MetaTokenResponse = await tokenResponse.json()
+
+      if (!tokenResponse.ok || !tokenData.access_token) {
+        console.error('SDK token exchange failed:', tokenData)
+        throw new Error('Failed to exchange code for token')
+      }
+
+      // Get long-lived token
+      const longLivedUrl = new URL('https://graph.facebook.com/v23.0/oauth/access_token')
+      longLivedUrl.searchParams.set('grant_type', 'fb_exchange_token')
+      longLivedUrl.searchParams.set('client_id', META_APP_ID)
+      longLivedUrl.searchParams.set('client_secret', META_APP_SECRET)
+      longLivedUrl.searchParams.set('fb_exchange_token', tokenData.access_token)
+
+      const longLivedResponse = await fetch(longLivedUrl.toString())
+      const longLivedData: MetaTokenResponse = await longLivedResponse.json()
+
+      const accessToken = longLivedData.access_token || tokenData.access_token
+      const expiresIn = longLivedData.expires_in || tokenData.expires_in
+
+      // Get WhatsApp Business Accounts
+      const wabaResponse = await fetch(
+        `https://graph.facebook.com/v23.0/me/businesses?fields=id,name,owned_whatsapp_business_accounts{id,name,phone_numbers{id,verified_name,display_phone_number,quality_rating}}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      )
+      const wabaData = await wabaResponse.json()
+
+      if (!wabaResponse.ok) {
+        console.error('Failed to fetch WABA:', wabaData)
+        throw new Error('Failed to fetch WhatsApp Business Accounts')
+      }
+
+      const sdkAccountType = account_type || 'business_app'
+      const phoneNumbers: Array<{
+        phone_number: string;
+        display_name: string;
+        waba_id: string;
+        phone_number_id: string;
+        quality_rating: string;
+      }> = []
+      const allWabaIds: string[] = []
+
+      for (const business of wabaData.data || []) {
+        for (const waba of business.owned_whatsapp_business_accounts?.data || []) {
+          allWabaIds.push(waba.id)
+          for (const phone of waba.phone_numbers?.data || []) {
+            const { error } = await supabase.from('whatsapp_numbers').upsert({
+              user_id: claimsData.user.id,
+              phone_number: phone.display_phone_number,
+              display_name: phone.verified_name,
+              waba_id: waba.id,
+              phone_number_id: phone.id,
+              access_token: accessToken,
+              token_expires_at: expiresIn 
+                ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+                : null,
+              status: 'active',
+              business_name: business.name,
+              quality_rating: phone.quality_rating,
+              account_type: sdkAccountType,
+            }, {
+              onConflict: 'phone_number_id',
+              ignoreDuplicates: false 
+            })
+
+            if (error) {
+              console.error('Failed to store phone number:', error)
+            }
+
+            phoneNumbers.push({
+              phone_number: phone.display_phone_number,
+              display_name: phone.verified_name,
+              waba_id: waba.id,
+              phone_number_id: phone.id,
+              quality_rating: phone.quality_rating,
+            })
+          }
+        }
+      }
+
+      // Update tokens for all related WABA numbers
+      if (allWabaIds.length > 0) {
+        console.log(`[SDK OAuth] Updating tokens for WABAs: ${allWabaIds.join(', ')}`)
+        await supabase
+          .from('whatsapp_numbers')
+          .update({ 
+            access_token: accessToken,
+            token_expires_at: expiresIn 
+              ? new Date(Date.now() + expiresIn * 1000).toISOString() 
+              : null,
+            status: 'active',
+            updated_at: new Date().toISOString()
+          })
+          .in('waba_id', allWabaIds)
+      }
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        phone_numbers: phoneNumbers 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Refresh token endpoint
     if (action === 'refresh-token') {
       const authHeader = req.headers.get('Authorization')

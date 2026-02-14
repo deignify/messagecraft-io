@@ -330,6 +330,77 @@ Deno.serve(async (req) => {
         })
       }
       const success = await updateSheetRow(googleToken, shop.google_sheet_id, 'Orders', row_index - 1, values)
+      
+      // Send WhatsApp notification to customer about status change
+      if (success && values.length >= 13) {
+        const customerPhone = values[2] // phone column
+        const orderStatus = values[12] // order_status column
+        const orderId = values[0]
+        const productName = `${values[5]} ${values[6]} ${values[7]}` // brand model variant
+        const branch = values[4]
+        const pickupDate = values[14] || ''
+        
+        if (customerPhone && orderStatus) {
+          // Get WhatsApp number credentials
+          const { data: waNumber } = await supabase
+            .from('whatsapp_numbers')
+            .select('phone_number_id, access_token')
+            .eq('id', shop.whatsapp_number_id)
+            .single()
+          
+          if (waNumber) {
+            let customerMsg = ''
+            const statusLower = orderStatus.toLowerCase()
+            
+            if (statusLower === 'confirmed') {
+              customerMsg = `✅ *Order Confirmed!*\n\n` +
+                `🆔 Order: *${orderId}*\n` +
+                `📱 Product: *${productName}*\n` +
+                `🏪 Branch: *${branch}*\n` +
+                `📅 Pickup: ${pickupDate}\n\n` +
+                `Aapka order confirm ho gaya hai! Pickup date pe branch pe aayein. 🙏\n\n` +
+                `Thank you for your order!`
+            } else if (statusLower === 'delivered') {
+              customerMsg = `📦 *Order Delivered!*\n\n` +
+                `🆔 Order: *${orderId}*\n` +
+                `📱 Product: *${productName}*\n\n` +
+                `Aapka order successfully deliver ho gaya hai! 🎉\n\n` +
+                `Thank you for choosing us! 🙏`
+            } else if (statusLower === 'cancelled') {
+              customerMsg = `❌ *Order Cancelled*\n\n` +
+                `🆔 Order: *${orderId}*\n` +
+                `📱 Product: *${productName}*\n\n` +
+                `Aapka order cancel kar diya gaya hai.\n` +
+                `Agar koi sawaal hai to humse contact karein. 🙏`
+            }
+            
+            if (customerMsg) {
+              try {
+                await fetch(
+                  `https://graph.facebook.com/v23.0/${waNumber.phone_number_id}/messages`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${waNumber.access_token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      messaging_product: 'whatsapp',
+                      recipient_type: 'individual',
+                      to: customerPhone,
+                      type: 'text',
+                      text: { body: customerMsg },
+                    }),
+                  }
+                )
+              } catch (notifyErr) {
+                console.error('Customer notification error:', notifyErr)
+              }
+            }
+          }
+        }
+      }
+      
       return new Response(JSON.stringify({ success }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })

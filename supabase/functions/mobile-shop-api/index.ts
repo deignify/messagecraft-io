@@ -1,9 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const MobileShopApiSchema = z.object({
+  action: z.string().min(1).max(50),
+  whatsapp_number_id: z.string().uuid(),
+  settings: z.record(z.unknown()).optional(),
+  row_index: z.number().int().positive().optional(),
+  values: z.array(z.string()).optional(),
+  previous_status: z.string().max(50).optional(),
+}).passthrough()
 
 // ============ GOOGLE SHEETS AUTH ============
 function base64UrlEncode(data: Uint8Array): string {
@@ -146,7 +156,15 @@ Deno.serve(async (req) => {
     }
     const userId = userData.user.id
 
-    const body = await req.json()
+    const rawBody = await req.json()
+    const parseResult = MobileShopApiSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const body = parseResult.data
     const { action, whatsapp_number_id } = body
 
     // Get shop

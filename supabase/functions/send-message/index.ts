@@ -1,29 +1,32 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface SendMessageRequest {
-  whatsapp_number_id: string;
-  to: string;
-  message_type: 'text' | 'template' | 'image' | 'document' | 'video' | 'audio' | 'interactive';
-  content?: string;
-  template_name?: string;
-  template_language?: string;
-  template_params?: Record<string, string[]>;
-  media_url?: string;
-  media_caption?: string;
-  media_filename?: string;
-  interactive?: {
-    type: 'button' | 'list';
-    header?: { type: string; text?: string };
-    body: { text: string };
-    footer?: { text: string };
-    action: Record<string, unknown>;
-  };
-}
+const SendMessageSchema = z.object({
+  whatsapp_number_id: z.string().uuid(),
+  to: z.string().min(1).max(20),
+  message_type: z.enum(['text', 'template', 'image', 'document', 'video', 'audio', 'interactive']),
+  content: z.string().max(4096).optional(),
+  template_name: z.string().max(512).optional(),
+  template_language: z.string().max(10).optional(),
+  template_params: z.record(z.array(z.string().max(1024))).optional(),
+  media_url: z.string().url().max(2048).optional(),
+  media_caption: z.string().max(1024).optional(),
+  media_filename: z.string().max(256).optional(),
+  interactive: z.object({
+    type: z.enum(['button', 'list']),
+    header: z.object({ type: z.string(), text: z.string().optional() }).optional(),
+    body: z.object({ text: z.string().max(1024) }),
+    footer: z.object({ text: z.string().max(60) }).optional(),
+    action: z.record(z.unknown()),
+  }).optional(),
+}).strict()
+
+type SendMessageRequest = z.infer<typeof SendMessageSchema>
 
 interface MetaMessageResponse {
   messaging_product: string;
@@ -59,13 +62,16 @@ Deno.serve(async (req) => {
       })
     }
 
-    const body: SendMessageRequest = await req.json()
-    const { whatsapp_number_id, to, message_type, content, template_name, template_language, template_params, media_url, media_caption, media_filename, interactive } = body
-
-    // Validate required fields
-    if (!whatsapp_number_id || !to) {
-      throw new Error('Missing required fields: whatsapp_number_id and to')
+    const rawBody = await req.json()
+    const parseResult = SendMessageSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
+    const body = parseResult.data
+    const { whatsapp_number_id, to, message_type, content, template_name, template_language, template_params, media_url, media_caption, media_filename, interactive } = body
 
     // Get WhatsApp number details
     const { data: waNumber, error: waError } = await supabase

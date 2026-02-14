@@ -1,9 +1,17 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+const ManageTemplateSchema = z.object({
+  action: z.enum(['delete', 'edit']),
+  whatsapp_number_id: z.string().uuid(),
+  template_name: z.string().max(512).optional(),
+  template_id: z.string().uuid().optional(),
+}).strict()
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -33,12 +41,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    const body = await req.json()
-    const { action, whatsapp_number_id, template_name, template_id } = body
-
-    if (!whatsapp_number_id || !action) {
-      throw new Error('whatsapp_number_id and action are required')
+    const rawBody = await req.json()
+    const parseResult = ManageTemplateSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
+    const { action, whatsapp_number_id, template_name, template_id } = parseResult.data
 
     // Get WhatsApp number details
     const { data: waNumber, error: waError } = await supabase

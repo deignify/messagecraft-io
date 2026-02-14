@@ -1,32 +1,37 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1'
+import { z } from 'https://esm.sh/zod@3.23.8'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface AutomationRequest {
-  action: 'create' | 'update' | 'delete' | 'toggle' | 'test' | 'get-sessions';
-  automation_id?: string;
-  whatsapp_number_id?: string;
-  automation?: {
-    name: string;
-    trigger_type: 'first_message' | 'keyword' | 'always';
-    trigger_keywords?: string[];
-    is_active?: boolean;
-    priority?: number;
-    steps?: Array<{
-      step_order: number;
-      step_type: 'message' | 'menu' | 'condition' | 'delay' | 'assign';
-      message_content?: string;
-      menu_options?: { options: Array<{ id: string; title: string }> };
-      condition_rules?: { conditions: Array<{ keyword: string; next_step_id: string }> };
-      delay_seconds?: number;
-    }>;
-  };
-  test_phone?: string;
-  test_message?: string;
-}
+const AutomationStepSchema = z.object({
+  step_order: z.number().int().min(0).max(100),
+  step_type: z.enum(['message', 'menu', 'condition', 'delay', 'assign']),
+  message_content: z.string().max(4096).optional(),
+  menu_options: z.object({ options: z.array(z.object({ id: z.string(), title: z.string() })) }).optional(),
+  condition_rules: z.object({ conditions: z.array(z.object({ keyword: z.string(), next_step_id: z.string() })) }).optional(),
+  delay_seconds: z.number().int().min(0).max(86400).optional(),
+})
+
+const AutomationRequestSchema = z.object({
+  action: z.enum(['create', 'update', 'delete', 'toggle', 'test', 'get-sessions']),
+  automation_id: z.string().uuid().optional(),
+  whatsapp_number_id: z.string().uuid().optional(),
+  automation: z.object({
+    name: z.string().min(1).max(256),
+    trigger_type: z.enum(['first_message', 'keyword', 'always']),
+    trigger_keywords: z.array(z.string().max(100)).optional(),
+    is_active: z.boolean().optional(),
+    priority: z.number().int().min(0).max(1000).optional(),
+    steps: z.array(AutomationStepSchema).optional(),
+  }).optional(),
+  test_phone: z.string().max(20).optional(),
+  test_message: z.string().max(1024).optional(),
+}).strict()
+
+type AutomationRequest = z.infer<typeof AutomationRequestSchema>
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -56,7 +61,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    const body: AutomationRequest = await req.json()
+    const rawBody = await req.json()
+    const parseResult = AutomationRequestSchema.safeParse(rawBody)
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: 'Invalid input', details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    const body = parseResult.data
     const { action, automation_id, whatsapp_number_id, automation, test_phone, test_message } = body
 
     switch (action) {

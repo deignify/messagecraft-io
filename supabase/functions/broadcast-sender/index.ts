@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { z } from "https://esm.sh/zod@3.23.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +8,19 @@ const corsHeaders = {
 };
 
 const META_GRAPH_URL = "https://graph.facebook.com/v23.0";
+
+const BroadcastActionSchema = z.object({
+  action: z.enum(["create", "send", "list", "get", "delete"]),
+  whatsapp_number_id: z.string().uuid().optional(),
+  name: z.string().max(256).optional(),
+  template_name: z.string().max(512).optional(),
+  template_language: z.string().max(10).optional(),
+  template_params: z.record(z.array(z.string().max(1024))).optional(),
+  filter_categories: z.array(z.string().max(100)).optional(),
+  filter_tags: z.array(z.string().max(100)).optional(),
+  contact_ids: z.array(z.string().uuid()).optional(),
+  campaign_id: z.string().uuid().optional(),
+}).passthrough();
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +53,15 @@ Deno.serve(async (req) => {
     }
     const userId = claimsData.claims.sub;
 
-    const { action, ...params } = await req.json();
+    const rawBody = await req.json();
+    const parseResult = BroadcastActionSchema.safeParse(rawBody);
+    if (!parseResult.success) {
+      return new Response(JSON.stringify({ error: "Invalid input", details: parseResult.error.flatten().fieldErrors }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { action, ...params } = parseResult.data;
 
     let result;
     switch (action) {

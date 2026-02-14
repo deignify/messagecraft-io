@@ -831,6 +831,124 @@ export type Database = {
           },
         ]
       }
+      mobile_shop_branches: {
+        Row: {
+          address: string | null
+          city: string | null
+          contact_phone: string | null
+          created_at: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          qr_code_url: string | null
+          shop_id: string
+          upi_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          qr_code_url?: string | null
+          shop_id: string
+          upi_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          contact_phone?: string | null
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          qr_code_url?: string | null
+          shop_id?: string
+          upi_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mobile_shop_branches_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "mobile_shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mobile_shops: {
+        Row: {
+          advance_amount_max: number | null
+          advance_amount_min: number | null
+          agent_notify_phone: string | null
+          created_at: string | null
+          description: string | null
+          google_sheet_id: string | null
+          id: string
+          is_active: boolean | null
+          language: string
+          name: string
+          owner_phone: string | null
+          qr_code_url: string | null
+          updated_at: string | null
+          upi_id: string | null
+          user_id: string
+          welcome_message: string | null
+          whatsapp_number_id: string
+        }
+        Insert: {
+          advance_amount_max?: number | null
+          advance_amount_min?: number | null
+          agent_notify_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          google_sheet_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          name: string
+          owner_phone?: string | null
+          qr_code_url?: string | null
+          updated_at?: string | null
+          upi_id?: string | null
+          user_id: string
+          welcome_message?: string | null
+          whatsapp_number_id: string
+        }
+        Update: {
+          advance_amount_max?: number | null
+          advance_amount_min?: number | null
+          agent_notify_phone?: string | null
+          created_at?: string | null
+          description?: string | null
+          google_sheet_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          name?: string
+          owner_phone?: string | null
+          qr_code_url?: string | null
+          updated_at?: string | null
+          upi_id?: string | null
+          user_id?: string
+          welcome_message?: string | null
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mobile_shops_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

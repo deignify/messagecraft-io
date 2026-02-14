@@ -68,27 +68,44 @@ export default function WhatsAppNumbers() {
   const [fbSdkReady, setFbSdkReady] = useState(false);
   const [connectingBusiness, setConnectingBusiness] = useState(false);
 
-  // Initialize Facebook SDK
+  // Load and initialize Facebook SDK dynamically
   useEffect(() => {
-    window.fbAsyncInit = function () {
+    const initFB = () => {
       window.FB.init({
         appId: META_APP_ID,
         cookie: true,
         xfbml: false,
         version: 'v23.0',
       });
+      console.log('[FB SDK] Initialized successfully');
       setFbSdkReady(true);
     };
 
     // If SDK already loaded
     if (window.FB) {
-      window.FB.init({
-        appId: META_APP_ID,
-        cookie: true,
-        xfbml: false,
-        version: 'v23.0',
-      });
-      setFbSdkReady(true);
+      initFB();
+      return;
+    }
+
+    // Set the async init callback
+    window.fbAsyncInit = initFB;
+
+    // Dynamically inject the SDK script if not already present
+    if (!document.getElementById('facebook-jssdk')) {
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => {
+        console.log('[FB SDK] Script loaded');
+      };
+      script.onerror = () => {
+        console.error('[FB SDK] Failed to load script');
+        toast.error('Failed to load Facebook SDK. Please refresh the page.');
+      };
+      document.body.appendChild(script);
     }
   }, []);
 
@@ -143,6 +160,36 @@ export default function WhatsAppNumbers() {
     }
   };
 
+  // Fallback: redirect-based flow for Business App when FB SDK can't load
+  const handleBusinessAppRedirectFallback = () => {
+    if (!session?.access_token) return;
+
+    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
+    const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+    const returnUrl = `${window.location.origin}/dashboard/numbers`;
+
+    const stateValue = btoa(
+      JSON.stringify({
+        user_id: session.user.id,
+        timestamp: Date.now(),
+        return_url: returnUrl,
+        account_type: 'business_app',
+      })
+    );
+
+    const authUrl = new URL('https://www.facebook.com/v23.0/dialog/oauth');
+    authUrl.searchParams.set('client_id', META_APP_ID);
+    authUrl.searchParams.set('redirect_uri', functionBaseUrl);
+    authUrl.searchParams.set('state', stateValue);
+    authUrl.searchParams.set('scope', 'business_management,whatsapp_business_management,whatsapp_business_messaging');
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('config_id', META_CONFIG_ID);
+    authUrl.searchParams.set('feature_type', 'whatsapp_business_app_onboarding');
+    authUrl.searchParams.set('override_default_response_type', 'true');
+
+    window.location.href = authUrl.toString();
+  };
+
   const handleConnect = async () => {
     if (!session?.access_token) {
       toast.error('Please log in to connect WhatsApp');
@@ -151,78 +198,88 @@ export default function WhatsAppNumbers() {
 
     // Business App: use Facebook JS SDK Embedded Signup popup
     if (connectionType === 'business_app') {
-      if (!fbSdkReady || !window.FB) {
-        toast.error('Facebook SDK is still loading. Please try again in a moment.');
-        return;
-      }
-
       setConnectingBusiness(true);
-      
-      window.FB.login(
-        async (response: any) => {
-          if (response.authResponse?.code) {
-            const code = response.authResponse.code;
-            toast.loading('Connecting your WhatsApp Business...', { id: 'fb-connect' });
 
-            try {
-              const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
-              const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
+      // If FB SDK is ready, use it for the proper Embedded Signup experience
+      if (fbSdkReady && window.FB) {
+        try {
+          window.FB.login(
+            async (response: any) => {
+              if (response.authResponse?.code) {
+                const code = response.authResponse.code;
+                toast.loading('Connecting your WhatsApp Business...', { id: 'fb-connect' });
 
-              const stateValue = btoa(
-                JSON.stringify({
-                  user_id: session.user.id,
-                  timestamp: Date.now(),
-                  account_type: 'business_app',
-                })
-              );
+                try {
+                  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || 'hevojjzymlfyjmhprcnt';
+                  const functionBaseUrl = `https://${projectId}.supabase.co/functions/v1/meta-oauth`;
 
-              const res = await fetch(`${functionBaseUrl}?action=callback`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({
-                  code,
-                  redirect_uri: window.location.origin + '/',
-                  state: stateValue,
-                }),
-              });
+                  const stateValue = btoa(
+                    JSON.stringify({
+                      user_id: session.user.id,
+                      timestamp: Date.now(),
+                      account_type: 'business_app',
+                    })
+                  );
 
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok || !data?.success) {
-                throw new Error(data?.error || 'Failed to connect');
+                  const res = await fetch(`${functionBaseUrl}?action=callback`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${session.access_token}`,
+                    },
+                    body: JSON.stringify({
+                      code,
+                      redirect_uri: window.location.origin + '/',
+                      state: stateValue,
+                    }),
+                  });
+
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok || !data?.success) {
+                    throw new Error(data?.error || 'Failed to connect');
+                  }
+
+                  toast.success(
+                    `Successfully connected ${data.phone_numbers?.length || 0} WhatsApp number(s)!`,
+                    { id: 'fb-connect' }
+                  );
+                  await refreshNumbers();
+                  setConnectDialogOpen(false);
+                } catch (err) {
+                  console.error('FB Embedded Signup exchange failed:', err);
+                  toast.error('Failed to connect WhatsApp Business. Please try again.', { id: 'fb-connect' });
+                }
+              } else {
+                console.log('FB login cancelled or no code returned', response);
+                if (response.status !== 'unknown') {
+                  toast.error('Connection cancelled or failed.');
+                }
               }
-
-              toast.success(
-                `Successfully connected ${data.phone_numbers?.length || 0} WhatsApp number(s)!`,
-                { id: 'fb-connect' }
-              );
-              await refreshNumbers();
-              setConnectDialogOpen(false);
-            } catch (err) {
-              console.error('FB Embedded Signup exchange failed:', err);
-              toast.error('Failed to connect WhatsApp Business. Please try again.', { id: 'fb-connect' });
-            }
-          } else {
-            console.log('FB login cancelled or no code returned', response);
-            toast.error('Connection cancelled or failed.');
-          }
-          setConnectingBusiness(false);
-        },
-        {
-          config_id: META_CONFIG_ID,
-          response_type: 'code',
-          override_default_response_type: true,
-          extras: {
-            setup: {
-              solutionID: META_APP_ID,
+              setConnectingBusiness(false);
             },
-            featureType: 'whatsapp_business_app_onboarding',
-            sessionInfoVersion: '3',
-          },
+            {
+              config_id: META_CONFIG_ID,
+              response_type: 'code',
+              override_default_response_type: true,
+              extras: {
+                setup: {
+                  solutionID: META_APP_ID,
+                },
+                featureType: 'whatsapp_business_app_onboarding',
+                sessionInfoVersion: '3',
+              },
+            }
+          );
+        } catch (err) {
+          console.error('[FB SDK] FB.login() error:', err);
+          // Fallback to redirect-based flow
+          handleBusinessAppRedirectFallback();
         }
-      );
+      } else {
+        // FB SDK not loaded — use redirect-based fallback
+        console.log('[FB SDK] Not ready, using redirect fallback');
+        handleBusinessAppRedirectFallback();
+      }
       return;
     }
 

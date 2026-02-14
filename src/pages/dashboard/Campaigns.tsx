@@ -85,6 +85,28 @@ export default function Campaigns() {
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [templateVariableValues, setTemplateVariableValues] = useState<Record<string, string>>({});
+
+  // Extract variables from selected template components
+  const selectedTemplateData = useMemo(() => {
+    const t = templates.find(t => t.name === selectedTemplate);
+    if (!t || !t.components) return { template: t, variables: [] as string[] };
+    
+    const components = Array.isArray(t.components) ? t.components : [];
+    const bodyComponent = components.find((c: any) => c.type === 'BODY');
+    const bodyText = bodyComponent?.text || '';
+    
+    // Extract {{1}}, {{2}}, etc.
+    const varRegex = /\{\{(\d+)\}\}/g;
+    const vars: string[] = [];
+    let match;
+    while ((match = varRegex.exec(bodyText)) !== null) {
+      if (!vars.includes(match[1])) vars.push(match[1]);
+    }
+    vars.sort((a, b) => parseInt(a) - parseInt(b));
+    
+    return { template: t, variables: vars, bodyText };
+  }, [templates, selectedTemplate]);
 
   // Derived data
   const allCategories = useMemo(() => {
@@ -205,12 +227,27 @@ export default function Campaigns() {
       toast({ title: 'Error', description: 'Please select at least one contact', variant: 'destructive' });
       return;
     }
+    // Validate template variables are filled
+    if (selectedTemplateData.variables.length > 0) {
+      const emptyVars = selectedTemplateData.variables.filter(v => !templateVariableValues[v]?.trim());
+      if (emptyVars.length > 0) {
+        toast({ title: 'Error', description: `Please fill all template variables: ${emptyVars.map(v => `{{${v}}}`).join(', ')}`, variant: 'destructive' });
+        return;
+      }
+    }
     const template = templates.find(t => t.name === selectedTemplate);
     if (!template) return;
 
     setCreating(true);
     try {
       const headers = await getAuthHeaders();
+      
+      // Build template_params from variable values
+      const templateParams: Record<string, string[]> = {};
+      if (selectedTemplateData.variables.length > 0) {
+        templateParams.body = selectedTemplateData.variables.map(v => templateVariableValues[v] || '');
+      }
+      
       const res = await fetch(`${SUPABASE_URL}/functions/v1/broadcast-sender`, {
         method: 'POST',
         headers,
@@ -220,6 +257,7 @@ export default function Campaigns() {
           name,
           template_name: template.name,
           template_language: template.language,
+          template_params: templateParams,
           contact_ids: Array.from(selectedContactIds),
         }),
       });
@@ -294,6 +332,7 @@ export default function Campaigns() {
     setSelectedContactIds(new Set());
     setSearchQuery('');
     setFilterCategory('all');
+    setTemplateVariableValues({});
   }
 
   function getStatusBadge(status: string) {
@@ -351,7 +390,7 @@ export default function Campaigns() {
                 {/* Template */}
                 <div>
                   <Label>Template (Approved Only)</Label>
-                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                  <Select value={selectedTemplate} onValueChange={(v) => { setSelectedTemplate(v); setTemplateVariableValues({}); }}>
                     <SelectTrigger><SelectValue placeholder="Select template" /></SelectTrigger>
                     <SelectContent>
                       {templates.map(t => (
@@ -366,7 +405,36 @@ export default function Campaigns() {
                   )}
                 </div>
 
-                {/* Category Quick Select */}
+                {/* Template Variables */}
+                {selectedTemplateData.variables.length > 0 && (
+                  <div className="space-y-3 p-3 bg-muted/50 rounded-lg border border-border">
+                    <div>
+                      <Label className="text-sm font-medium">Template Variables</Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Fill in the values for each variable. These will be the same for all recipients.
+                      </p>
+                    </div>
+                    {selectedTemplateData.bodyText && (
+                      <div className="text-xs bg-background p-2 rounded border border-border/50 text-muted-foreground italic">
+                        "{selectedTemplateData.bodyText}"
+                      </div>
+                    )}
+                    <div className="grid gap-2">
+                      {selectedTemplateData.variables.map((varKey) => (
+                        <div key={varKey} className="flex items-center gap-2">
+                          <Badge variant="outline" className="shrink-0 font-mono text-xs">{`{{${varKey}}}`}</Badge>
+                          <Input
+                            value={templateVariableValues[varKey] || ''}
+                            onChange={e => setTemplateVariableValues(prev => ({ ...prev, [varKey]: e.target.value }))}
+                            placeholder={`Value for {{${varKey}}}  (e.g. customer name, order ID...)`}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <Label className="mb-2 block">Quick Select by Category</Label>
                   <div className="flex flex-wrap gap-2">

@@ -406,19 +406,16 @@ function OrdersTab({ orders, loading, onRefresh, onUpdateOrder }: {
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
   const handleStatusChange = async (order: SheetOrder, newStatus: string) => {
+    // Derive payment status from order status
+    let paymentStatus = order.payment_status;
+    if (newStatus === 'Confirmed') paymentStatus = 'Verified';
+    else if (newStatus === 'Cancelled') paymentStatus = 'Cancelled';
+    else if (newStatus === 'Delivered') paymentStatus = 'Verified';
+    
     const values = [
       order.order_id, order.name, order.phone, order.city, order.branch,
       order.brand, order.model, order.variant, order.color, order.price,
-      order.type, order.payment_status, newStatus, order.date, order.pickup_date, order.notes
-    ];
-    await onUpdateOrder(order.index, values);
-  };
-
-  const handlePaymentChange = async (order: SheetOrder, newPayment: string) => {
-    const values = [
-      order.order_id, order.name, order.phone, order.city, order.branch,
-      order.brand, order.model, order.variant, order.color, order.price,
-      order.type, newPayment, order.order_status, order.date, order.pickup_date, order.notes
+      order.type, paymentStatus, newStatus, order.date, order.pickup_date, order.notes
     ];
     await onUpdateOrder(order.index, values);
   };
@@ -485,25 +482,15 @@ function OrdersTab({ orders, loading, onRefresh, onUpdateOrder }: {
                       {o.date && <p className="text-xs text-muted-foreground">📅 {o.date} {o.pickup_date ? `| Pickup: ${o.pickup_date}` : ''}</p>}
                       {o.notes && <p className="text-xs text-muted-foreground italic">📝 {o.notes}</p>}
                     </div>
-                    <div className="flex gap-2 flex-wrap">
-                      <Select defaultValue={o.order_status || 'Pending'} onValueChange={v => handleStatusChange(o, v)}>
-                        <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Pending">Pending</SelectItem>
-                          <SelectItem value="Confirmed">Confirmed</SelectItem>
-                          <SelectItem value="Delivered">Delivered</SelectItem>
-                          <SelectItem value="Cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select defaultValue={o.payment_status || 'Pending'} onValueChange={v => handlePaymentChange(o, v)}>
-                        <SelectTrigger className="w-[130px] h-8 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Pending">Pending</SelectItem>
-                          <SelectItem value="Received">Received</SelectItem>
-                          <SelectItem value="Verified">Verified</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Select defaultValue={o.order_status || 'Pending'} onValueChange={v => handleStatusChange(o, v)}>
+                      <SelectTrigger className="w-[140px] h-9 text-xs"><SelectValue placeholder="Update Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pending">⏳ Pending</SelectItem>
+                        <SelectItem value="Confirmed">✅ Confirmed</SelectItem>
+                        <SelectItem value="Delivered">📦 Delivered</SelectItem>
+                        <SelectItem value="Cancelled">❌ Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>

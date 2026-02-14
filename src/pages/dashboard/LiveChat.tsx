@@ -462,7 +462,7 @@ export default function LiveChat() {
   }
 
   return (
-    <div className="h-full md:h-[calc(100vh-64px)] flex flex-col md:flex-row">
+    <div className="fixed inset-0 z-40 md:static md:z-auto md:h-[calc(100vh-64px)] flex flex-col md:flex-row bg-background">
       {/* Conversations List */}
       <div className={cn(
         "w-full md:w-80 lg:w-96 border-r border-border flex flex-col bg-card",
@@ -659,7 +659,7 @@ export default function LiveChat() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="p-2 md:p-4 border-t border-border bg-card space-y-2 md:space-y-3">
+            <div className="p-2 md:p-4 border-t border-border bg-card space-y-2 md:space-y-3 flex-shrink-0">
               {/* 24-hour window warning */}
               {isOutsideWindow && (
                 <div className="flex items-center gap-2 p-2 md:p-3 bg-status-pending/10 border border-status-pending/20 rounded-lg text-status-pending">

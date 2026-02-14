@@ -200,6 +200,64 @@ Deno.serve(async (req) => {
       })
     }
 
+    // ===== GET SHOP DETAILS FROM SHEET =====
+    if (action === 'get-shop-details') {
+      const rows = await readSheet(googleToken, shop.google_sheet_id, 'ShopDetails!A:B')
+      const details: Record<string, string> = {}
+      rows.slice(1).forEach(row => {
+        if (row[0]) details[row[0]] = (row[1] || '').trim()
+      })
+      return new Response(JSON.stringify({ details }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // ===== UPDATE SHOP DETAILS IN SHEET =====
+    if (action === 'update-shop-details') {
+      const { settings } = body
+      if (!settings || typeof settings !== 'object') {
+        return new Response(JSON.stringify({ error: 'settings object required' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      await ensureSheet(googleToken, shop.google_sheet_id, 'ShopDetails')
+      const shopData = [
+        ['Setting', 'Value'],
+        ['Shop Name', settings.name || shop.name || ''],
+        ['Description', settings.description || shop.description || ''],
+        ['Language', settings.language || shop.language || 'hinglish'],
+        ['Owner Phone', settings.owner_phone || shop.owner_phone || ''],
+        ['Agent Notify Phone', settings.agent_notify_phone || shop.agent_notify_phone || ''],
+        ['UPI ID', settings.upi_id || shop.upi_id || ''],
+        ['Advance Min', String(settings.advance_amount_min || shop.advance_amount_min || 1000)],
+        ['Advance Max', String(settings.advance_amount_max || shop.advance_amount_max || 2000)],
+        ['Welcome Message', settings.welcome_message || shop.welcome_message || ''],
+        ['Is Active', (settings.is_active !== undefined ? settings.is_active : shop.is_active) ? 'Yes' : 'No'],
+        ['WhatsApp Number ID', shop.whatsapp_number_id],
+      ]
+      await writeSheet(googleToken, shop.google_sheet_id, 'ShopDetails!A1', shopData)
+      
+      // Also update DB
+      const dbUpdate: Record<string, unknown> = {}
+      if (settings.name) dbUpdate.name = settings.name
+      if (settings.description !== undefined) dbUpdate.description = settings.description
+      if (settings.language) dbUpdate.language = settings.language
+      if (settings.owner_phone !== undefined) dbUpdate.owner_phone = settings.owner_phone
+      if (settings.agent_notify_phone !== undefined) dbUpdate.agent_notify_phone = settings.agent_notify_phone
+      if (settings.upi_id !== undefined) dbUpdate.upi_id = settings.upi_id
+      if (settings.advance_amount_min !== undefined) dbUpdate.advance_amount_min = settings.advance_amount_min
+      if (settings.advance_amount_max !== undefined) dbUpdate.advance_amount_max = settings.advance_amount_max
+      if (settings.welcome_message !== undefined) dbUpdate.welcome_message = settings.welcome_message
+      
+      if (Object.keys(dbUpdate).length > 0) {
+        await supabase.from('mobile_shops').update(dbUpdate).eq('id', shop.id)
+      }
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
     // ===== GET BRANCHES FROM SHEET =====
     if (action === 'get-branches') {
       const rows = await readSheet(googleToken, shop.google_sheet_id, 'Branches!A:F')

@@ -94,23 +94,19 @@ export function useTeam() {
         
       setMembers(allMembers);
 
-      // Fetch pending invitations sent by the workspace owner
-      if (effectiveWorkspaceOwnerId === user.id) {
-        const { data: invitationsData, error: invitationsError } = await supabase
-          .from('team_invitations')
-          .select('*')
-          .eq('workspace_owner_id', user.id)
-          .is('accepted_at', null)
-          .gt('expires_at', new Date().toISOString());
+      // Fetch pending invitations for the workspace (visible to workspace owner and team admins)
+      const { data: invitationsData, error: invitationsError } = await supabase
+        .from('team_invitations')
+        .select('*')
+        .eq('workspace_owner_id', effectiveWorkspaceOwnerId)
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString());
 
-        if (invitationsError) throw invitationsError;
-        setInvitations((invitationsData || []).map(inv => ({
-          ...inv,
-          role: inv.role as TeamRole,
-        })));
-      } else {
-        setInvitations([]);
-      }
+      if (invitationsError) throw invitationsError;
+      setInvitations((invitationsData || []).map(inv => ({
+        ...inv,
+        role: inv.role as TeamRole,
+      })));
 
       // Fetch invitations received by the current user (by email)
       const { data: receivedData } = await supabase
@@ -138,13 +134,13 @@ export function useTeam() {
   }, [fetchTeamData]);
 
   const inviteMember = async (email: string, role: TeamRole) => {
-    if (!user) return null;
+    if (!user || !workspaceOwnerId) return null;
 
     try {
       const { data, error } = await supabase
         .from('team_invitations')
         .insert({
-          workspace_owner_id: user.id,
+          workspace_owner_id: workspaceOwnerId,
           email,
           role,
         })

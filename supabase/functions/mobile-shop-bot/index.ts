@@ -635,7 +635,7 @@ Deno.serve(async (req) => {
             title: 'Available Brands',
             rows: uniqueBrands.map((b, i) => {
               const count = new Set(newProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).map(p => p.model)).size
-              return { id: `brand_${i}`, title: b, description: `${count} models` }
+              return { id: `brand_${i}`, title: b.substring(0, 24), description: `${count} models` }
             }),
           }]
           useInteractiveList = true
@@ -657,7 +657,7 @@ Deno.serve(async (req) => {
             title: 'Available Brands',
             rows: uniqueBrands.map((b, i) => {
               const count = new Set(shProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase()).map(p => p.model)).size
-              return { id: `brand_${i}`, title: b, description: `${count} models` }
+              return { id: `brand_${i}`, title: b.substring(0, 24), description: `${count} models` }
             }),
           }]
           useInteractiveList = true
@@ -695,7 +695,7 @@ Deno.serve(async (req) => {
               rows: uniqueBrands.slice(0, 10).map((b, i) => {
                 const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
                 const modelCount = new Set(bProducts.map(p => p.model)).size
-                return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
+                return { id: `bbudget_${i}`, title: b.substring(0, 24), description: `${modelCount} models` }
               }),
             }]
             useInteractiveList = true
@@ -747,7 +747,7 @@ Deno.serve(async (req) => {
             rows: uniqueBrands.slice(0, 10).map((b, i) => {
               const bProducts = budgetProducts.filter(p => p.brand.toLowerCase() === b.toLowerCase())
               const modelCount = new Set(bProducts.map(p => p.model)).size
-              return { id: `bbudget_${i}`, title: b, description: `${modelCount} models` }
+              return { id: `bbudget_${i}`, title: b.substring(0, 24), description: `${modelCount} models` }
             }),
           }]
           useInteractiveList = true
@@ -790,7 +790,7 @@ Deno.serve(async (req) => {
               const status = availableCount > 0
                 ? `${formatPrice(minPrice)} | ${typeLabel}`
                 : `⚠️ Unavailable | ${typeLabel}`
-              return { id: `model_${i}`, title: m, description: status }
+              return { id: `model_${i}`, title: m.substring(0, 24), description: status }
             }),
           }]
           useInteractiveList = true
@@ -847,7 +847,7 @@ Deno.serve(async (req) => {
               const availableCount = mp.filter(p => isProductAvailable(p)).length
               const minPrice = Math.min(...mp.map(p => p.price))
               const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
-              return { id: `model_${i}`, title: m, description: status }
+              return { id: `model_${i}`, title: m.substring(0, 24), description: status }
             }),
           }]
           useInteractiveList = true
@@ -1402,7 +1402,7 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
           title: `Under ${formatPrice(budget)}`,
           rows: sorted.map((p, i) => ({
             id: `model_${i}`,
-            title: `${p.brand} ${p.model}`,
+            title: `${p.brand} ${p.model}`.substring(0, 24),
             description: `${p.variant} | ${formatPrice(p.price)} | ${p.type}`,
           })),
         }],
@@ -1430,7 +1430,7 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
             const availableCount = mp.filter(p => isProductAvailable(p)).length
             const minPrice = Math.min(...mp.map(p => p.price))
             const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
-            return { id: `model_${i}`, title: m, description: status }
+            return { id: `model_${i}`, title: m.substring(0, 24), description: status }
           }),
         }],
       },

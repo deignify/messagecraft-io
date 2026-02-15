@@ -167,13 +167,40 @@ Deno.serve(async (req) => {
     const body = parseResult.data
     const { action, whatsapp_number_id } = body
 
-    // Get shop
-    const { data: shop } = await supabase
+    // Get shop - check ownership or team membership
+    let shop = null
+    
+    // First try direct ownership
+    const { data: ownShop } = await supabase
       .from('mobile_shops')
       .select('*')
       .eq('whatsapp_number_id', whatsapp_number_id)
       .eq('user_id', userId)
       .maybeSingle()
+    
+    if (ownShop) {
+      shop = ownShop
+    } else {
+      // Check if user is a team member of the workspace that owns this shop
+      const { data: membership } = await supabase
+        .from('team_members')
+        .select('workspace_owner_id, role')
+        .eq('user_id', userId)
+        .maybeSingle()
+      
+      if (membership) {
+        const { data: teamShop } = await supabase
+          .from('mobile_shops')
+          .select('*')
+          .eq('whatsapp_number_id', whatsapp_number_id)
+          .eq('user_id', membership.workspace_owner_id)
+          .maybeSingle()
+        
+        if (teamShop) {
+          shop = teamShop
+        }
+      }
+    }
 
     if (!shop) {
       return new Response(JSON.stringify({ error: 'Shop not found' }), {

@@ -392,13 +392,17 @@ export type Database = {
       contacts: {
         Row: {
           category: string | null
+          city: string | null
           created_at: string
           email: string | null
+          group: string | null
           id: string
           last_message_at: string | null
           name: string | null
           notes: string | null
           phone: string
+          source: string | null
+          status: string | null
           tags: string[] | null
           updated_at: string
           user_id: string
@@ -406,13 +410,17 @@ export type Database = {
         }
         Insert: {
           category?: string | null
+          city?: string | null
           created_at?: string
           email?: string | null
+          group?: string | null
           id?: string
           last_message_at?: string | null
           name?: string | null
           notes?: string | null
           phone: string
+          source?: string | null
+          status?: string | null
           tags?: string[] | null
           updated_at?: string
           user_id: string
@@ -420,13 +428,17 @@ export type Database = {
         }
         Update: {
           category?: string | null
+          city?: string | null
           created_at?: string
           email?: string | null
+          group?: string | null
           id?: string
           last_message_at?: string | null
           name?: string | null
           notes?: string | null
           phone?: string
+          source?: string | null
+          status?: string | null
           tags?: string[] | null
           updated_at?: string
           user_id?: string

@@ -247,6 +247,47 @@ async function sendWhatsAppInteractiveList(
 }
 
 // ============ HELPER FUNCTIONS ============
+
+// Extract model name from Item Details like "(D) SAMSUNG GALAXY Z FOLD7 12+256GB BLUE"
+function extractModelName(itemDetails: string, brand: string, variant: string, color: string): string {
+  let model = itemDetails
+  // Remove prefix in parentheses like (D), (DUMMY)
+  model = model.replace(/^\([^)]*\)\s*/, '')
+  // Remove brand name from beginning (case-insensitive)
+  const brandUpper = brand.toUpperCase()
+  const modelUpper = model.toUpperCase()
+  if (modelUpper.startsWith(brandUpper + ' ')) {
+    model = model.substring(brand.length).trim()
+  } else if (modelUpper.startsWith(brandUpper)) {
+    model = model.substring(brand.length).trim()
+  }
+  // Also try removing brand with hyphenated suffixes like "APPLE-PAD" → remove "APPLE-PAD"
+  // The brand column may have entries like "APPLE-PAD" which appear differently in item details
+  // Remove color from end (case-insensitive)
+  if (color && color.toUpperCase() !== 'NA') {
+    const trimmed = model.trimEnd()
+    if (trimmed.toUpperCase().endsWith(color.toUpperCase())) {
+      model = trimmed.substring(0, trimmed.length - color.length).trim()
+    }
+  }
+  // Remove variant+GB from end
+  if (variant && variant.toUpperCase() !== 'NA') {
+    const variantPattern = variant.replace(/\+/g, '\\+').replace(/\s+/g, '\\s*')
+    model = model.replace(new RegExp('\\s*' + variantPattern + '\\s*GB\\s*$', 'i'), '').trim()
+    model = model.replace(new RegExp('\\s*' + variantPattern + '\\s*$', 'i'), '').trim()
+  }
+  // Clean up any trailing whitespace or stray characters
+  model = model.replace(/\s+/g, ' ').trim()
+  return model || itemDetails
+}
+
+// Detect sheet format and parse products accordingly
+function isNewSheetFormat(rows: string[][]): boolean {
+  if (rows.length === 0) return false
+  const header = rows[0].map(h => (h || '').toLowerCase().trim())
+  return header.some(h => h.includes('company')) || header.some(h => h.includes('item detail'))
+}
+
 // Get only available products (stock > 0 and available = yes)
 function getAvailableProducts(rows: string[][]): Product[] {
   return getAllProducts(rows).filter(p => p.available.toLowerCase() === 'yes' && p.stock > 0)
@@ -254,6 +295,34 @@ function getAvailableProducts(rows: string[][]): Product[] {
 
 // Get ALL products including unavailable ones (for showing models to customers)
 function getAllProducts(rows: string[][]): Product[] {
+  if (isNewSheetFormat(rows)) {
+    // New format: Company | Item Details | Material Centre | BCNP1 | P2(Config) | P3(Colour) | Cl.Qty | Price
+    return rows.slice(1).map(row => {
+      const brand = (row[0] || '').trim()
+      const itemDetails = (row[1] || '').trim()
+      const bcnp1 = (row[3] || '').trim()
+      const variant = (row[4] || '').trim()
+      const color = (row[5] || '').trim()
+      const stock = parseInt(row[6] || '0')
+      const price = parseInt(row[7] || '0')
+      // Determine type from last character of BCNP1: V/W = new, S = secondhand
+      const lastChar = bcnp1.slice(-1).toUpperCase()
+      const type = lastChar === 'S' ? 'secondhand' : 'new'
+      // Extract model name from item details
+      const model = extractModelName(itemDetails, brand, variant, color)
+      return {
+        brand,
+        model,
+        variant: variant.toUpperCase() === 'NA' ? '' : variant,
+        color,
+        price,
+        stock,
+        type,
+        available: stock > 0 ? 'Yes' : 'No',
+      }
+    }).filter(p => p.brand && p.model)
+  }
+  // Old format: Brand | Model | Variant | Color | Price | Stock | Type | Available
   return rows.slice(1).map(row => ({
     brand: (row[0] || '').trim(),
     model: (row[1] || '').trim(),

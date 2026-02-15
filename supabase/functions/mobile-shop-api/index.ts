@@ -296,17 +296,61 @@ Deno.serve(async (req) => {
     // ===== GET PRODUCTS FROM SHEET =====
     if (action === 'get-products') {
       const rows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
-      const products = rows.slice(1).map((row, i) => ({
-        index: i + 2,
-        brand: (row[0] || '').trim(),
-        model: (row[1] || '').trim(),
-        variant: (row[2] || '').trim(),
-        color: (row[3] || '').trim(),
-        price: row[4] || '0',
-        stock: row[5] || '0',
-        type: (row[6] || 'new').trim(),
-        available: (row[7] || 'Yes').trim(),
-      })).filter(p => p.brand && p.model)
+      const isNew = rows.length > 0 && rows[0].some((h: string) => (h || '').toLowerCase().includes('company') || (h || '').toLowerCase().includes('item detail'))
+      
+      let products
+      if (isNew) {
+        // New format: Company | Item Details | Material Centre | BCNP1 | P2(Config) | P3(Colour) | Cl.Qty | Price
+        products = rows.slice(1).map((row, i) => {
+          const brand = (row[0] || '').trim()
+          const itemDetails = (row[1] || '').trim()
+          const bcnp1 = (row[3] || '').trim()
+          const variant = (row[4] || '').trim()
+          const color = (row[5] || '').trim()
+          const stock = row[6] || '0'
+          const price = row[7] || '0'
+          const lastChar = bcnp1.slice(-1).toUpperCase()
+          const type = lastChar === 'S' ? 'secondhand' : 'new'
+          // Extract model from item details
+          let model = itemDetails.replace(/^\([^)]*\)\s*/, '')
+          const brandUpper = brand.toUpperCase()
+          if (model.toUpperCase().startsWith(brandUpper + ' ')) model = model.substring(brand.length).trim()
+          else if (model.toUpperCase().startsWith(brandUpper)) model = model.substring(brand.length).trim()
+          if (color && color.toUpperCase() !== 'NA' && model.toUpperCase().trimEnd().endsWith(color.toUpperCase())) {
+            model = model.trimEnd().substring(0, model.trimEnd().length - color.length).trim()
+          }
+          if (variant && variant.toUpperCase() !== 'NA') {
+            const vp = variant.replace(/\+/g, '\\+').replace(/\s+/g, '\\s*')
+            model = model.replace(new RegExp('\\s*' + vp + '\\s*GB\\s*$', 'i'), '').trim()
+            model = model.replace(new RegExp('\\s*' + vp + '\\s*$', 'i'), '').trim()
+          }
+          model = model.replace(/\s+/g, ' ').trim() || itemDetails
+          return {
+            index: i + 2,
+            brand,
+            model,
+            variant: variant.toUpperCase() === 'NA' ? '' : variant,
+            color,
+            price,
+            stock,
+            type,
+            available: parseInt(stock) > 0 ? 'Yes' : 'No',
+          }
+        }).filter(p => p.brand && p.model)
+      } else {
+        // Old format: Brand | Model | Variant | Color | Price | Stock | Type | Available
+        products = rows.slice(1).map((row, i) => ({
+          index: i + 2,
+          brand: (row[0] || '').trim(),
+          model: (row[1] || '').trim(),
+          variant: (row[2] || '').trim(),
+          color: (row[3] || '').trim(),
+          price: row[4] || '0',
+          stock: row[5] || '0',
+          type: (row[6] || 'new').trim(),
+          available: (row[7] || 'Yes').trim(),
+        })).filter(p => p.brand && p.model)
+      }
       return new Response(JSON.stringify({ products }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
@@ -355,46 +399,80 @@ Deno.serve(async (req) => {
       const orderVariant = (values[7] || '').trim()
 
       // Stock management: confirm -> decrement, cancel confirmed -> restore
-      if (newStatus === 'confirmed' && prevStatus !== 'confirmed') {
+      if ((newStatus === 'confirmed' && prevStatus !== 'confirmed') || (newStatus === 'cancelled' && prevStatus === 'confirmed')) {
         const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
-        let productFound = false
+        const isNewFmt = productRows.length > 0 && productRows[0].some((h: string) => (h || '').toLowerCase().includes('company') || (h || '').toLowerCase().includes('item detail'))
+        
         for (let pi = 1; pi < productRows.length; pi++) {
           const pRow = productRows[pi]
-          if ((pRow[0] || '').trim().toLowerCase() === orderBrand.toLowerCase() &&
-              (pRow[1] || '').trim().toLowerCase() === orderModel.toLowerCase() &&
-              (pRow[2] || '').trim().toLowerCase() === orderVariant.toLowerCase()) {
-            const currentStock = parseInt(pRow[5] || '0')
+          let matchBrand: string, matchVariant: string, stockIdx: number, availIdx: number
+          
+          if (isNewFmt) {
+            // New format: Col0=Company, Col1=ItemDetails, Col2=MatCentre, Col3=BCNP1, Col4=Config(variant), Col5=Colour, Col6=Stock, Col7=Price
+            matchBrand = (pRow[0] || '').trim()
+            const itemDetails = (pRow[1] || '').trim()
+            matchVariant = (pRow[4] || '').trim()
+            const matchColor = (pRow[5] || '').trim()
+            stockIdx = 6
+            availIdx = -1 // No available column in new format, derived from stock
+            
+            // Extract model from item details for matching
+            let extractedModel = itemDetails.replace(/^\([^)]*\)\s*/, '')
+            const bu = matchBrand.toUpperCase()
+            if (extractedModel.toUpperCase().startsWith(bu + ' ')) extractedModel = extractedModel.substring(matchBrand.length).trim()
+            else if (extractedModel.toUpperCase().startsWith(bu)) extractedModel = extractedModel.substring(matchBrand.length).trim()
+            if (matchColor && matchColor.toUpperCase() !== 'NA' && extractedModel.toUpperCase().trimEnd().endsWith(matchColor.toUpperCase())) {
+              extractedModel = extractedModel.trimEnd().substring(0, extractedModel.trimEnd().length - matchColor.length).trim()
+            }
+            if (matchVariant && matchVariant.toUpperCase() !== 'NA') {
+              const vp = matchVariant.replace(/\+/g, '\\+').replace(/\s+/g, '\\s*')
+              extractedModel = extractedModel.replace(new RegExp('\\s*' + vp + '\\s*GB\\s*$', 'i'), '').trim()
+              extractedModel = extractedModel.replace(new RegExp('\\s*' + vp + '\\s*$', 'i'), '').trim()
+            }
+            extractedModel = extractedModel.replace(/\s+/g, ' ').trim()
+            
+            if (matchBrand.toLowerCase() !== orderBrand.toLowerCase() ||
+                extractedModel.toLowerCase() !== orderModel.toLowerCase() ||
+                (matchVariant.toUpperCase() === 'NA' ? '' : matchVariant).toLowerCase() !== orderVariant.toLowerCase()) {
+              continue
+            }
+          } else {
+            // Old format: Col0=Brand, Col1=Model, Col2=Variant, Col3=Color, Col4=Price, Col5=Stock, Col6=Type, Col7=Available
+            matchBrand = (pRow[0] || '').trim()
+            const matchModel = (pRow[1] || '').trim()
+            matchVariant = (pRow[2] || '').trim()
+            stockIdx = 5
+            availIdx = 7
+            
+            if (matchBrand.toLowerCase() !== orderBrand.toLowerCase() ||
+                matchModel.toLowerCase() !== orderModel.toLowerCase() ||
+                matchVariant.toLowerCase() !== orderVariant.toLowerCase()) {
+              continue
+            }
+          }
+          
+          // Found matching product
+          const currentStock = parseInt(pRow[stockIdx] || '0')
+          
+          if (newStatus === 'confirmed') {
             if (currentStock <= 0) {
               return new Response(JSON.stringify({ error: `Product not available! ${orderBrand} ${orderModel} ${orderVariant} is out of stock.` }), {
                 status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
               })
             }
             const newStock = currentStock - 1
-            pRow[5] = String(newStock)
-            if (newStock <= 0) pRow[7] = 'No'
+            pRow[stockIdx] = String(newStock)
+            if (availIdx >= 0 && newStock <= 0) pRow[availIdx] = 'No'
             await updateSheetRow(googleToken, shop.google_sheet_id, 'Products', pi, pRow)
             console.log(`Stock decremented: ${orderBrand} ${orderModel} ${orderVariant} -> ${newStock}`)
-            productFound = true
-            break
-          }
-        }
-        if (!productFound) {
-          console.warn(`Product not found for stock update: ${orderBrand} ${orderModel} ${orderVariant}`)
-        }
-      } else if (newStatus === 'cancelled' && prevStatus === 'confirmed') {
-        const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
-        for (let pi = 1; pi < productRows.length; pi++) {
-          const pRow = productRows[pi]
-          if ((pRow[0] || '').trim().toLowerCase() === orderBrand.toLowerCase() &&
-              (pRow[1] || '').trim().toLowerCase() === orderModel.toLowerCase() &&
-              (pRow[2] || '').trim().toLowerCase() === orderVariant.toLowerCase()) {
-            const currentStock = parseInt(pRow[5] || '0')
-            pRow[5] = String(currentStock + 1)
-            pRow[7] = 'Yes'
+          } else {
+            // Cancelled - restore stock
+            pRow[stockIdx] = String(currentStock + 1)
+            if (availIdx >= 0) pRow[availIdx] = 'Yes'
             await updateSheetRow(googleToken, shop.google_sheet_id, 'Products', pi, pRow)
             console.log(`Stock restored: ${orderBrand} ${orderModel} ${orderVariant} -> ${currentStock + 1}`)
-            break
           }
+          break
         }
       }
 

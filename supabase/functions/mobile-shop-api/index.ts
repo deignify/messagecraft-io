@@ -295,23 +295,36 @@ Deno.serve(async (req) => {
 
     // ===== GET PRODUCTS FROM SHEET =====
     if (action === 'get-products') {
-      const rows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
+      const rows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:Z')
       const isNew = rows.length > 0 && rows[0].some((h: string) => (h || '').toLowerCase().includes('company') || (h || '').toLowerCase().includes('item detail'))
       
       let products
       if (isNew) {
-        // New format: Company | Item Details | Material Centre | BCNP1 | P2(Config) | P3(Colour) | Cl.Qty | Price
+        const header = rows[0].map((h: string) => (h || '').toLowerCase().trim())
+        const ci = (patterns: string[], fallback: number) => {
+          const idx = header.findIndex(h => patterns.some(p => h.includes(p)))
+          return idx >= 0 ? idx : fallback
+        }
+        const companyIdx = ci(['company'], 0)
+        const itemIdx = ci(['item detail'], 1)
+        const bcnpIdx = ci(['bcn', 'p1'], 3)
+        const configIdx = ci(['config', 'p2'], 4)
+        const colourIdx = ci(['colour', 'color', 'p3'], 5)
+        const priceIdx = ci(['price', 'amount'], 7)
+        const stockIdx = ci(['qty', 'stock'], 6)
+        const availIdx = header.findIndex(h => h.includes('available') || h.includes('availability'))
+
         products = rows.slice(1).map((row, i) => {
-          const brand = (row[0] || '').trim()
-          const itemDetails = (row[1] || '').trim()
-          const bcnp1 = (row[3] || '').trim()
-          const variant = (row[4] || '').trim()
-          const color = (row[5] || '').trim()
-          const stock = row[6] || '0'
-          const price = row[7] || '0'
+          const brand = (row[companyIdx] || '').trim()
+          const itemDetails = (row[itemIdx] || '').trim()
+          const bcnp1 = (row[bcnpIdx] || '').trim()
+          const variant = (row[configIdx] || '').trim()
+          const color = (row[colourIdx] || '').trim()
+          const stockVal = row[stockIdx] || '0'
+          const price = row[priceIdx] || '0'
+          const availableRaw = availIdx >= 0 ? (row[availIdx] || '').trim() : ''
           const lastChar = bcnp1.slice(-1).toUpperCase()
           const type = lastChar === 'S' ? 'secondhand' : 'new'
-          // Extract model from item details
           let model = itemDetails.replace(/^\([^)]*\)\s*/, '')
           const brandUpper = brand.toUpperCase()
           if (model.toUpperCase().startsWith(brandUpper + ' ')) model = model.substring(brand.length).trim()
@@ -325,6 +338,9 @@ Deno.serve(async (req) => {
             model = model.replace(new RegExp('\\s*' + vp + '\\s*$', 'i'), '').trim()
           }
           model = model.replace(/\s+/g, ' ').trim() || itemDetails
+          const available = availableRaw
+            ? (availableRaw.toLowerCase() === 'yes' ? 'Yes' : 'No')
+            : (parseInt(stockVal) > 0 ? 'Yes' : 'No')
           return {
             index: i + 2,
             brand,
@@ -332,9 +348,9 @@ Deno.serve(async (req) => {
             variant: variant.toUpperCase() === 'NA' ? '' : variant,
             color,
             price,
-            stock,
+            stock: stockVal,
             type,
-            available: parseInt(stock) > 0 ? 'Yes' : 'No',
+            available,
           }
         }).filter(p => p.brand && p.model)
       } else {
@@ -400,21 +416,32 @@ Deno.serve(async (req) => {
 
       // Stock management: confirm -> decrement, cancel confirmed -> restore
       if ((newStatus === 'confirmed' && prevStatus !== 'confirmed') || (newStatus === 'cancelled' && prevStatus === 'confirmed')) {
-        const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:H')
+        const productRows = await readSheet(googleToken, shop.google_sheet_id, 'Products!A:Z')
         const isNewFmt = productRows.length > 0 && productRows[0].some((h: string) => (h || '').toLowerCase().includes('company') || (h || '').toLowerCase().includes('item detail'))
         
+        // Detect column indices dynamically for new format
+        let newFmtStockIdx = 6, newFmtAvailIdx = -1
+        if (isNewFmt) {
+          const hdr = productRows[0].map((h: string) => (h || '').toLowerCase().trim())
+          const findCol = (patterns: string[], fb: number) => {
+            const idx = hdr.findIndex(h => patterns.some(p => h.includes(p)))
+            return idx >= 0 ? idx : fb
+          }
+          newFmtStockIdx = findCol(['qty', 'stock'], 6)
+          newFmtAvailIdx = hdr.findIndex(h => h.includes('available') || h.includes('availability'))
+        }
+
         for (let pi = 1; pi < productRows.length; pi++) {
           const pRow = productRows[pi]
           let matchBrand: string, matchVariant: string, stockIdx: number, availIdx: number
           
           if (isNewFmt) {
-            // New format: Col0=Company, Col1=ItemDetails, Col2=MatCentre, Col3=BCNP1, Col4=Config(variant), Col5=Colour, Col6=Stock, Col7=Price
             matchBrand = (pRow[0] || '').trim()
             const itemDetails = (pRow[1] || '').trim()
             matchVariant = (pRow[4] || '').trim()
             const matchColor = (pRow[5] || '').trim()
-            stockIdx = 6
-            availIdx = -1 // No available column in new format, derived from stock
+            stockIdx = newFmtStockIdx
+            availIdx = newFmtAvailIdx
             
             // Extract model from item details for matching
             let extractedModel = itemDetails.replace(/^\([^)]*\)\s*/, '')

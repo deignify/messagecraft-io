@@ -296,29 +296,48 @@ function getAvailableProducts(rows: string[][]): Product[] {
 // Get ALL products including unavailable ones (for showing models to customers)
 function getAllProducts(rows: string[][]): Product[] {
   if (isNewSheetFormat(rows)) {
-    // New format: Company | Item Details | Material Centre | BCNP1 | P2(Config) | P3(Colour) | Cl.Qty | Price
+    // New format: detect columns dynamically from header
+    const header = rows[0].map(h => (h || '').toLowerCase().trim())
+    const colIdx = {
+      company: header.findIndex(h => h.includes('company')),
+      itemDetails: header.findIndex(h => h.includes('item detail')),
+      bcnp1: header.findIndex(h => h.includes('bcn') || h.includes('p1')),
+      config: header.findIndex(h => h.includes('config') || h.includes('p2')),
+      colour: header.findIndex(h => h.includes('colour') || h.includes('color') || h.includes('p3')),
+      price: header.findIndex(h => h.includes('price') || h.includes('amount')),
+      stock: header.findIndex(h => h.includes('qty') || h.includes('stock')),
+      available: header.findIndex(h => h.includes('available') || h.includes('availability')),
+    }
+    // Fallback to positional if not found
+    const ci = (idx: number, fallback: number) => idx >= 0 ? idx : fallback
+
     return rows.slice(1).map(row => {
-      const brand = (row[0] || '').trim()
-      const itemDetails = (row[1] || '').trim()
-      const bcnp1 = (row[3] || '').trim()
-      const variant = (row[4] || '').trim()
-      const color = (row[5] || '').trim()
-      const stock = parseInt(row[6] || '0')
-      const price = parseInt(row[7] || '0')
+      const brand = (row[ci(colIdx.company, 0)] || '').trim()
+      const itemDetails = (row[ci(colIdx.itemDetails, 1)] || '').trim()
+      const bcnp1 = (row[ci(colIdx.bcnp1, 3)] || '').trim()
+      const variant = (row[ci(colIdx.config, 4)] || '').trim()
+      const color = (row[ci(colIdx.colour, 5)] || '').trim()
+      const priceVal = parseInt(row[ci(colIdx.price, 7)] || '0')
+      const stockVal = parseInt(row[ci(colIdx.stock, 6)] || '0')
+      const availableRaw = colIdx.available >= 0 ? (row[colIdx.available] || '').trim() : ''
       // Determine type from last character of BCNP1: V/W = new, S = secondhand
       const lastChar = bcnp1.slice(-1).toUpperCase()
       const type = lastChar === 'S' ? 'secondhand' : 'new'
       // Extract model name from item details
       const model = extractModelName(itemDetails, brand, variant, color)
+      // Determine availability: use explicit Available column if present, else derive from stock
+      const available = availableRaw
+        ? (availableRaw.toLowerCase() === 'yes' ? 'Yes' : 'No')
+        : (stockVal > 0 ? 'Yes' : 'No')
       return {
         brand,
         model,
         variant: (variant.toUpperCase() === 'NA' || !variant) ? '' : variant,
         color,
-        price,
-        stock,
+        price: priceVal,
+        stock: stockVal,
         type,
-        available: stock > 0 ? 'Yes' : 'No',
+        available,
       }
     }).filter(p => p.brand && p.model)
   }
@@ -577,7 +596,7 @@ Deno.serve(async (req) => {
 
     // Load products and branches from sheet
     const [productRows, branchRows] = await Promise.all([
-      readSheet(googleToken, shop.google_sheet_id, 'Products!A:H'),
+      readSheet(googleToken, shop.google_sheet_id, 'Products!A:Z'),
       readSheet(googleToken, shop.google_sheet_id, 'Branches!A:F'),
     ])
     const allProducts = getAllProducts(productRows)

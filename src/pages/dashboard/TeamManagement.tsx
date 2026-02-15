@@ -22,9 +22,11 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamRole } from '@/hooks/useTeamRole';
 
 export default function TeamManagement() {
   const { user } = useAuth();
+  const { role: teamRole } = useTeamRole();
   const {
     members,
     invitations,
@@ -49,8 +51,10 @@ export default function TeamManagement() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [autoAssignEnabled, setAutoAssignEnabled] = useState(false);
 
+  // Team admins can invite but only workspace owner can change roles/remove
+  const canInvite = isWorkspaceOwner || teamRole === 'admin';
   const hasReceivedInvitations = receivedInvitations.length > 0;
-  const showInvitationsTab = isWorkspaceOwner || hasReceivedInvitations;
+  const showInvitationsTab = canInvite || hasReceivedInvitations;
 
   return (
     <div className="p-3 md:p-6 space-y-3 md:space-y-6 pb-24 md:pb-6">
@@ -70,7 +74,7 @@ export default function TeamManagement() {
             <RefreshCw className="h-4 w-4 mr-1.5" />
             Refresh
           </Button>
-          {isWorkspaceOwner && (
+          {canInvite && (
             <Button onClick={() => setInviteDialogOpen(true)} size="sm" className="h-9">
               <UserPlus className="h-4 w-4 mr-1.5" />
               Invite
@@ -199,7 +203,7 @@ export default function TeamManagement() {
             </Card>
           )}
 
-          {isWorkspaceOwner && (
+          {canInvite && (
             <>
               {invitations.length === 0 ? (
                 <Card>
@@ -256,7 +260,7 @@ export default function TeamManagement() {
             </>
           )}
 
-          {!isWorkspaceOwner && receivedInvitations.length === 0 && (
+          {!canInvite && receivedInvitations.length === 0 && (
             <Card>
               <CardContent className="py-10 text-center">
                 <Mail className="h-10 w-10 mx-auto text-muted-foreground/50" />

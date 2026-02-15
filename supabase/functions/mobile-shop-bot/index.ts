@@ -313,7 +313,7 @@ function getAllProducts(rows: string[][]): Product[] {
       return {
         brand,
         model,
-        variant: variant.toUpperCase() === 'NA' ? '' : variant,
+        variant: (variant.toUpperCase() === 'NA' || !variant) ? '' : variant,
         color,
         price,
         stock,
@@ -934,7 +934,7 @@ Deno.serve(async (req) => {
               rows: uniqueVariants.map((v, i) => {
                 const vp = availableModelProducts.filter(p => p.variant === v)
                 const minPrice = Math.min(...vp.map(p => p.price))
-                return { id: `variant_${i}`, title: v, description: `From ${formatPrice(minPrice)}` }
+                return { id: `variant_${i}`, title: (v || 'Standard').substring(0, 24), description: `From ${formatPrice(minPrice)}` }
               }),
             }]
             useInteractiveList = true
@@ -1486,7 +1486,7 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
           rows: uniqueVariants.map((v, i) => {
             const vp = availableModelProducts.filter(p => p.variant === v)
             const minPrice = Math.min(...vp.map(p => p.price))
-            return { id: `variant_${i}`, title: v, description: `From ${formatPrice(minPrice)}` }
+            return { id: `variant_${i}`, title: (v || 'Standard').substring(0, 24), description: `From ${formatPrice(minPrice)}` }
           }),
         }],
       },

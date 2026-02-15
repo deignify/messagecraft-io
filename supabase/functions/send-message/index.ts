@@ -73,17 +73,42 @@ Deno.serve(async (req) => {
     const body = parseResult.data
     const { whatsapp_number_id, to, message_type, content, template_name, template_language, template_params, media_url, media_caption, media_filename, interactive } = body
 
-    // Get WhatsApp number details
-    const { data: waNumber, error: waError } = await supabase
-      .from('whatsapp_numbers')
-      .select('phone_number_id, access_token, id')
-      .eq('id', whatsapp_number_id)
-      .eq('user_id', userData.user.id)
-      .single()
+    // Get WhatsApp number details - check ownership OR team membership
+    const userId = userData.user.id
 
-    if (waError || !waNumber) {
+    // First try direct ownership
+    let { data: waNumber } = await supabase
+      .from('whatsapp_numbers')
+      .select('phone_number_id, access_token, id, user_id')
+      .eq('id', whatsapp_number_id)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    // If not found, check if user is a team member of the number's owner
+    if (!waNumber) {
+      const { data: membership } = await supabase
+        .from('team_members')
+        .select('workspace_owner_id')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (membership) {
+        const { data: teamWaNumber } = await supabase
+          .from('whatsapp_numbers')
+          .select('phone_number_id, access_token, id, user_id')
+          .eq('id', whatsapp_number_id)
+          .eq('user_id', membership.workspace_owner_id)
+          .maybeSingle()
+        waNumber = teamWaNumber
+      }
+    }
+
+    if (!waNumber) {
       throw new Error('WhatsApp number not found or access denied')
     }
+
+    // Use the workspace owner's user_id for DB operations
+    const effectiveUserId = waNumber.user_id
 
     // Build the message payload based on type
     // Normalize phone number - remove non-digits and ensure consistent format
@@ -236,7 +261,7 @@ Deno.serve(async (req) => {
     let { data: conversation } = await supabase
       .from('conversations')
       .select('id')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', effectiveUserId)
       .eq('whatsapp_number_id', whatsapp_number_id)
       .eq('contact_phone', to)
       .maybeSingle()
@@ -247,7 +272,7 @@ Deno.serve(async (req) => {
       const { data: normalizedConversation } = await supabase
         .from('conversations')
         .select('id')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', effectiveUserId)
         .eq('whatsapp_number_id', whatsapp_number_id)
         .eq('contact_phone', phoneWithoutPlus)
         .maybeSingle()
@@ -260,7 +285,7 @@ Deno.serve(async (req) => {
       const { data: plusConversation } = await supabase
         .from('conversations')
         .select('id')
-        .eq('user_id', userData.user.id)
+        .eq('user_id', effectiveUserId)
         .eq('whatsapp_number_id', whatsapp_number_id)
         .eq('contact_phone', phoneWithPlus)
         .maybeSingle()
@@ -271,7 +296,7 @@ Deno.serve(async (req) => {
       const { data: newConversation } = await supabase
         .from('conversations')
         .insert({
-          user_id: userData.user.id,
+          user_id: effectiveUserId,
           whatsapp_number_id: whatsapp_number_id,
           contact_phone: normalizedPhone, // Use normalized phone for consistency
           status: 'open',
@@ -296,7 +321,7 @@ Deno.serve(async (req) => {
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
-        user_id: userData.user.id,
+        user_id: effectiveUserId,
         conversation_id: conversation!.id,
         whatsapp_number_id: whatsapp_number_id,
         wa_message_id: waMessageId,

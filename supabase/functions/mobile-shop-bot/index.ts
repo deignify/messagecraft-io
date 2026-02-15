@@ -840,16 +840,14 @@ Deno.serve(async (req) => {
         } else {
           listBody = `📱 *${selectedBrand}* - Model select karein:`
           listButtonText = 'Select Model'
-          listSections = [{
-            title: `${selectedBrand} Models`,
-            rows: uniqueModels.map((m, i) => {
+          const modelRows = uniqueModels.map((m, i) => {
               const mp = brandProducts.filter(p => p.model === m)
               const availableCount = mp.filter(p => isProductAvailable(p)).length
               const minPrice = Math.min(...mp.map(p => p.price))
               const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
               return { id: `model_${i}`, title: m.substring(0, 24), description: status }
-            }),
-          }]
+            })
+          listSections = chunkRows(modelRows, `${selectedBrand} Models`)
           useInteractiveList = true
           session.data.models = uniqueModels
           newState = 'choose_model'
@@ -1398,14 +1396,11 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
       list: {
         body: `💰 *Under ${formatPrice(budget)}* - ${matching.length} phones found:`,
         button: 'View Phones',
-        sections: [{
-          title: `Under ${formatPrice(budget)}`,
-          rows: sorted.map((p, i) => ({
+        sections: chunkRows(sorted.map((p, i) => ({
             id: `model_${i}`,
             title: `${p.brand} ${p.model}`.substring(0, 24),
             description: `${p.variant} | ${formatPrice(p.price)} | ${p.type}`,
-          })),
-        }],
+          })), `Under ${formatPrice(budget)}`),
       },
     }
   }
@@ -1423,16 +1418,13 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
       list: {
         body: `📱 *${matchedBrand}* - ${uniqueModels.length} models:`,
         button: 'Select Model',
-        sections: [{
-          title: `${matchedBrand} Models`,
-          rows: uniqueModels.map((m, i) => {
+        sections: chunkRows(uniqueModels.map((m, i) => {
             const mp = brandProducts.filter(p => p.model === m)
             const availableCount = mp.filter(p => isProductAvailable(p)).length
             const minPrice = Math.min(...mp.map(p => p.price))
             const status = availableCount > 0 ? `From ${formatPrice(minPrice)}` : '⚠️ Currently Unavailable'
             return { id: `model_${i}`, title: m.substring(0, 24), description: status }
-          }),
-        }],
+          }), `${matchedBrand} Models`),
       },
     }
   }
@@ -1497,6 +1489,19 @@ function handleFreeTextSearch(msg: string, products: Product[]): {
 }
 
 // ============ HELPERS ============
+function chunkRows(rows: Array<{id: string; title: string; description: string}>, sectionTitle: string): Array<{title: string; rows: typeof rows}> {
+  const MAX = 10
+  if (rows.length <= MAX) return [{ title: sectionTitle, rows }]
+  const sections: Array<{title: string; rows: typeof rows}> = []
+  for (let i = 0; i < rows.length; i += MAX) {
+    const chunk = rows.slice(i, i + MAX)
+    const page = Math.floor(i / MAX) + 1
+    const total = Math.ceil(rows.length / MAX)
+    sections.push({ title: `${sectionTitle} (${page}/${total})`, rows: chunk })
+  }
+  return sections
+}
+
 function getDefaultWelcome(shopName: string, language: string): string {
   if (language === 'hindi') {
     return `🙏 *${shopName}* में आपका स्वागत है!\n\nक्या आप नया मोबाइल देख रहे हैं, सेकंड हैंड, या बजट में फोन चाहिए?\n\n1️⃣ नया फोन\n2️⃣ सेकंड हैंड\n3️⃣ बजट सर्च`

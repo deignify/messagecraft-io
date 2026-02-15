@@ -13,7 +13,7 @@ const ShopBotSchema = z.object({
   from_phone: z.string().min(1).max(20),
   message_text: z.string().max(4096),
   message_type: z.string().max(20).optional(),
-  media_info: z.object({ type: z.string(), id: z.string(), mime_type: z.string() }).optional(),
+  media_info: z.object({ type: z.string(), id: z.string(), mime_type: z.string() }).nullable().optional(),
   contact_name: z.string().max(256).optional(),
   interactive_reply_id: z.string().max(256).nullable().optional(),
 }).strict()

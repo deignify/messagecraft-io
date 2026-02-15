@@ -18,7 +18,7 @@ const HotelBotSchema = z.object({
     id: z.string(),
     mime_type: z.string(),
     filename: z.string().optional(),
-  }).optional(),
+  }).nullable().optional(),
   contact_name: z.string().max(256).optional(),
 }).strict()
 

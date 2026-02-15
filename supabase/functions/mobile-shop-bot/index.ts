@@ -360,6 +360,21 @@ async function storeBotMessage(
   })
 }
 
+// ============ GREETING DETECTION ============
+function isGreeting(text: string): boolean {
+  const greetings = [
+    'hi', 'hii', 'hiii', 'h', 'hey', 'heyy', 'heya', 'hello', 'helo', 'hllo',
+    'hola', 'howdy', 'yo', 'sup', 'wassup', 'whatsup',
+    'namaste', 'namaskar', 'namaskaar',
+    'hii there', 'hi there', 'hello there',
+    'good morning', 'good afternoon', 'good evening', 'good night',
+    'gm', 'gn', 'ge',
+    'assalamualaikum', 'salam', 'sat sri akal',
+    'hy', 'hyyy', 'hiiii', 'helloo', 'hellooo',
+  ]
+  return greetings.some(g => text === g || text.startsWith(g + ' ') || text.startsWith(g + '!') || text.startsWith(g + ','))
+}
+
 // ============ MAIN BOT LOGIC ============
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -515,7 +530,7 @@ Deno.serve(async (req) => {
       // Don't change state - keep current session intact
     }
     // ===== RESET COMMANDS =====
-    else if (msg === '0' || msg === 'menu' || msg === 'hi' || msg === 'hello' || msg === 'start' || msg === 'reset') {
+    else if (msg === '0' || msg === 'menu' || msg === 'start' || msg === 'reset' || isGreeting(msg)) {
       const lang = shop.language || 'hinglish'
       const welcomeMsg = shop.welcome_message || getDefaultWelcome(shop.name, lang)
       responseText = welcomeMsg
